@@ -781,7 +781,12 @@ def main():
             conn.close()
         else:
             st.error("❌ Database connection failed")
-            st.info("Check your database configuration in secrets.toml")
+            # Add debug info
+            st.write("Debug Info:")
+            st.write(f"Host: {st.secrets['DB_HOST']}")
+            st.write(f"Database: {st.secrets['DB_NAME']}")
+            st.write(f"User: {st.secrets['DB_USER']}")
+            st.write(f"Port: {st.secrets['DB_PORT']}")
             return
         
         st.markdown("---")
