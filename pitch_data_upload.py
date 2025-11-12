@@ -14,7 +14,7 @@ import requests
 
 # Page configuration
 st.set_page_config(
-    page_title="Pitching Data Upload (1112-1730)",
+    page_title="Data Upload (1745)",
     page_icon="⚾",
     layout="wide"
 )
@@ -196,7 +196,7 @@ def format_player_display(player, show_ids=False):
         return f"{name} ({', '.join(details)})"
     return name
 
-def create_player_from_name(conn, pitcher_name, external_id=None, data_source=None):
+def create_player_from_name(conn, pitcher_name, external_id=None, data_source=None, pitcher_df=None):
     """Create a new player record from pitcher name and optional external ID
     
     Args:
@@ -204,6 +204,7 @@ def create_player_from_name(conn, pitcher_name, external_id=None, data_source=No
         pitcher_name: Full name string (e.g., "Silas Findley" or "John Paul Smith")
         external_id: Optional external system ID
         data_source: Optional data source name (Rapsodo, PitchLogic, Trackman)
+        pitcher_df: Optional DataFrame with pitcher's data (used to determine handedness)
     
     Returns:
         int: New player_id
@@ -227,6 +228,37 @@ def create_player_from_name(conn, pitcher_name, external_id=None, data_source=No
         first_name = names[0]
         last_name = ' '.join(names[1:])
     
+    # Determine handedness from arm slot if available
+    throws_hand = 'R'  # Default to right-handed
+    
+    if pitcher_df is not None and len(pitcher_df) > 0:
+        # Try to find arm slot column (various naming conventions)
+        arm_slot_col = None
+        for col in ['Arm Slot (yellow)', 'Arm Slot', 'ArmSlot', 'arm_slot']:
+            if col in pitcher_df.columns:
+                arm_slot_col = col
+                break
+        
+        if arm_slot_col:
+            # Get arm slot values (use median to avoid outliers)
+            arm_slot_values = pitcher_df[arm_slot_col].dropna()
+            if len(arm_slot_values) > 0:
+                # Try multiple pitches to get consistent reading
+                handedness_votes = []
+                for value in arm_slot_values.head(5):  # Check up to 5 pitches
+                    determined_hand = determine_handedness_from_arm_slot(value)
+                    if determined_hand:
+                        handedness_votes.append(determined_hand)
+                
+                # Use majority vote if we have any determinations
+                if handedness_votes:
+                    right_count = handedness_votes.count('R')
+                    left_count = handedness_votes.count('L')
+                    if left_count > right_count:
+                        throws_hand = 'L'
+                    else:
+                        throws_hand = 'R'
+    
     cursor = conn.cursor()
     
     # Build query with optional external ID
@@ -234,15 +266,15 @@ def create_player_from_name(conn, pitcher_name, external_id=None, data_source=No
         id_field = f"{data_source.lower()}_player_id"
         query = f"""
             INSERT INTO players (first_name, last_name, throws_hand, is_active, {id_field})
-            VALUES (%s, %s, 'R', TRUE, %s)
+            VALUES (%s, %s, %s, TRUE, %s)
         """
-        cursor.execute(query, (first_name, last_name, external_id))
+        cursor.execute(query, (first_name, last_name, throws_hand, external_id))
     else:
         query = """
             INSERT INTO players (first_name, last_name, throws_hand, is_active)
-            VALUES (%s, %s, 'R', TRUE)
+            VALUES (%s, %s, %s, TRUE)
         """
-        cursor.execute(query, (first_name, last_name))
+        cursor.execute(query, (first_name, last_name, throws_hand))
     
     conn.commit()
     player_id = cursor.lastrowid
@@ -324,6 +356,43 @@ def tilt_to_degrees(tilt_str):
         return float(tilt_str)
     except Exception as e:
         # If all parsing fails, return None
+        return None
+
+def determine_handedness_from_arm_slot(arm_slot_value):
+    """Determine pitcher handedness from arm slot angle.
+    
+    Arm slot is measured in degrees (0-360) or clock position.
+    - Right-handed pitchers: typically 30-150 degrees (1:00-5:00)
+    - Left-handed pitchers: typically 210-330 degrees (7:00-11:00)
+    
+    Args:
+        arm_slot_value: Arm slot value (can be degrees, clock time, or None)
+    
+    Returns:
+        str: 'R' for right-handed, 'L' for left-handed, None if cannot determine
+    """
+    if pd.isna(arm_slot_value):
+        return None
+    
+    # Convert to degrees if needed
+    arm_slot_degrees = tilt_to_degrees(arm_slot_value)
+    
+    if arm_slot_degrees is None:
+        return None
+    
+    # Normalize to 0-360 range
+    arm_slot_degrees = arm_slot_degrees % 360
+    
+    # Right-handed pitchers: release from right side (30-150 degrees, or 1:00-5:00)
+    # Left-handed pitchers: release from left side (210-330 degrees, or 7:00-11:00)
+    
+    if 30 <= arm_slot_degrees <= 150:
+        return 'R'
+    elif 210 <= arm_slot_degrees <= 330:
+        return 'L'
+    else:
+        # Ambiguous range (straight overhand or submarine)
+        # Default to R as it's more common
         return None
 
 # ============================================
@@ -641,11 +710,18 @@ def process_csv(df, player_id, data_source_name, session_id, filename, bulk_mode
             if not matched_player_id and auto_create_players:
                 try:
                     matched_player_id = create_player_from_name(
-                        conn, pitcher_name, external_id, data_source_name
+                        conn, pitcher_name, external_id, data_source_name, pitcher_df
                     )
                     stats['players_created'] += 1
                     id_info = f" (ID: {external_id})" if external_id else ""
-                    st.info(f"✅ Created new player: {pitcher_name}{id_info} → Database ID: {matched_player_id}")
+                    
+                    # Get the handedness that was determined
+                    cursor = conn.cursor(dictionary=True)
+                    cursor.execute("SELECT throws_hand FROM players WHERE player_id = %s", (matched_player_id,))
+                    player_info = cursor.fetchone()
+                    hand_display = "RHP" if player_info['throws_hand'] == 'R' else "LHP"
+                    
+                    st.info(f"✅ Created new player: {pitcher_name}{id_info} → Database ID: {matched_player_id} ({hand_display})")
                 except Exception as e:
                     error_msg = f"❌ Failed to create player '{pitcher_name}': {str(e)}"
                     stats['errors'].append(error_msg)
