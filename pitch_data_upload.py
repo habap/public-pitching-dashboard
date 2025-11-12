@@ -197,10 +197,35 @@ def format_player_display(player, show_ids=False):
     return name
 
 def create_player_from_name(conn, pitcher_name, external_id=None, data_source=None):
-    """Create a new player record from pitcher name and optional external ID"""
-    names = pitcher_name.strip().split()
-    first_name = names[0] if len(names) > 0 else "Unknown"
-    last_name = names[-1] if len(names) > 1 else "Player"
+    """Create a new player record from pitcher name and optional external ID
+    
+    Args:
+        conn: Database connection
+        pitcher_name: Full name string (e.g., "Silas Findley" or "John Paul Smith")
+        external_id: Optional external system ID
+        data_source: Optional data source name (Rapsodo, PitchLogic, Trackman)
+    
+    Returns:
+        int: New player_id
+    """
+    # Parse the name - handle various formats
+    pitcher_name = str(pitcher_name).strip()
+    names = pitcher_name.split()
+    
+    if len(names) == 0:
+        first_name = "Unknown"
+        last_name = "Player"
+    elif len(names) == 1:
+        first_name = names[0]
+        last_name = "Unknown"
+    elif len(names) == 2:
+        first_name = names[0]
+        last_name = names[1]
+    else:
+        # For names with 3+ parts (e.g., "John Paul Smith"), 
+        # take first as first_name, rest as last_name
+        first_name = names[0]
+        last_name = ' '.join(names[1:])
     
     cursor = conn.cursor()
     
@@ -220,7 +245,9 @@ def create_player_from_name(conn, pitcher_name, external_id=None, data_source=No
         cursor.execute(query, (first_name, last_name))
     
     conn.commit()
-    return cursor.lastrowid
+    player_id = cursor.lastrowid
+    
+    return player_id
 
 def get_data_sources(conn):
     """Retrieve all data sources"""
@@ -610,12 +637,22 @@ def process_csv(df, player_id, data_source_name, session_id, filename, bulk_mode
                 stats['errors'].append(duplicate_warning)
             
             if not matched_player_id and auto_create_players:
-                matched_player_id = create_player_from_name(
-                    conn, pitcher_name, external_id, data_source_name
-                )
-                stats['players_created'] += 1
-                id_info = f" (ID: {external_id})" if external_id else ""
-                st.info(f"Created new player: {pitcher_name}{id_info} → Database ID: {matched_player_id}")
+                try:
+                    matched_player_id = create_player_from_name(
+                        conn, pitcher_name, external_id, data_source_name
+                    )
+                    stats['players_created'] += 1
+                    id_info = f" (ID: {external_id})" if external_id else ""
+                    st.info(f"✅ Created new player: {pitcher_name}{id_info} → Database ID: {matched_player_id}")
+                except Exception as e:
+                    error_msg = f"❌ Failed to create player '{pitcher_name}': {str(e)}"
+                    stats['errors'].append(error_msg)
+                    st.error(error_msg)
+                    matched_player_id = None
+            elif not matched_player_id and not auto_create_players:
+                # Player not found and auto-create is disabled
+                skip_msg = f"⚠️ Skipped player '{pitcher_name}' - not found in database and auto-create disabled"
+                stats['errors'].append(skip_msg)
             
             if not matched_player_id:
                 stats['skipped'] += len(pitcher_df)
@@ -984,11 +1021,24 @@ def main():
                 
                 if unmatched_count > 0:
                     st.warning(f"⚠️ {unmatched_count} players could not be matched")
+                    
+                    # Show which players will need to be created
+                    unmatched_names = [m['CSV Name'] for m in match_data if m['Status'] == '❌ No Match']
+                    with st.expander("📋 Players not found in database", expanded=True):
+                        for name in unmatched_names:
+                            st.write(f"• {name}")
+                    
                     auto_create = st.checkbox(
                         "Automatically create new players for unmatched names",
                         value=True,  # Default to TRUE - auto-create by default
                         help="New players will be created with 'R' (right-handed) as default"
                     )
+                    
+                    # Show what will happen
+                    if auto_create:
+                        st.info(f"✅ **Ready to create:** {unmatched_count} new player(s) will be automatically created during upload")
+                    else:
+                        st.error(f"⚠️ **Warning:** {unmatched_count} player(s) will be skipped. Their pitches will NOT be uploaded.")
                 else:
                     st.success("✅ All players matched successfully!")
                     auto_create = False
