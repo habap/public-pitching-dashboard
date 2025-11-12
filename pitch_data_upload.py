@@ -14,7 +14,7 @@ import requests
 
 # Page configuration
 st.set_page_config(
-    page_title="Pitching Data Upload",
+    page_title="Pitching Data Upload (1112-1730)",
     page_icon="⚾",
     layout="wide"
 )
@@ -969,6 +969,15 @@ def main():
                     if col in df.columns:
                         pitcher_col = col
                         break
+                
+                # Check for separate First/Last name columns (PitchLogic format)
+                if not pitcher_col and 'First Name' in df.columns and 'Last Name' in df.columns:
+                    df['_pitcher_full_name'] = df['First Name'].astype(str) + ' ' + df['Last Name'].astype(str)
+                    pitcher_col = '_pitcher_full_name'
+                
+                if not pitcher_col:
+                    st.error("❌ Could not find pitcher name column in CSV. Please check your file format.")
+                    return
                 
                 unique_pitchers = df[pitcher_col].unique()
                 
