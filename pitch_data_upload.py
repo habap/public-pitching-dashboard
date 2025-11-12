@@ -271,20 +271,32 @@ def standardize_pitch_type(pitch_type):
 # ============================================
 
 def tilt_to_degrees(tilt_str):
-    """Convert clock tilt (e.g., '1:30') to degrees"""
+    """Convert clock tilt (e.g., '1:30' or '12:40') to degrees"""
     if pd.isna(tilt_str) or tilt_str == '':
         return None
     try:
         tilt_str = str(tilt_str).strip()
-        # Handle "1:30" format
-        if ':' in tilt_str:
-            hours, minutes = map(int, tilt_str.split(':'))
-            degrees = ((hours * 30) + (minutes / 2)) % 360
-            return degrees
-        # Handle decimal format (already in degrees)
-        else:
+        
+        # If it's already a number, return it
+        try:
             return float(tilt_str)
-    except:
+        except:
+            pass
+        
+        # Handle "1:30" format (clock time)
+        if ':' in tilt_str:
+            parts = tilt_str.split(':')
+            hours = int(parts[0])
+            minutes = int(parts[1])
+            
+            # Convert to degrees: each hour = 30°, each minute = 0.5°
+            degrees = ((hours % 12) * 30 + (minutes / 2)) % 360
+            return degrees
+        
+        # If no colon, try to parse as decimal
+        return float(tilt_str)
+    except Exception as e:
+        # If all parsing fails, return None
         return None
 
 # ============================================
@@ -382,8 +394,13 @@ def map_pitchlogic_fields(row):
     data['release_speed'] = row.get('Velo') or row.get('Speed') or row.get('Speed (mph)')
     data['spin_rate'] = (row.get('Spin') or row.get('SpinRate') or row.get('Spin Rate') or 
                          row.get('Total Spin (rpm)'))
-    data['spin_axis'] = (row.get('Axis') or row.get('SpinAxis') or row.get('Spin Axis') or
-                         row.get('Spin Direction (blue)'))
+    
+    # Spin axis - convert from clock time if needed
+    spin_axis_raw = (row.get('Axis') or row.get('SpinAxis') or row.get('Spin Axis') or
+                     row.get('Spin Direction (blue)'))
+    data['spin_axis'] = tilt_to_degrees(spin_axis_raw) if spin_axis_raw else None
+    
+    # Movement fields
     data['horizontal_break'] = (row.get('HB') or row.get('Horizontal Break') or 
                                 row.get('Horizontal Movement (in)'))
     data['vertical_break'] = (row.get('VB') or row.get('Vertical Break') or 
@@ -392,7 +409,10 @@ def map_pitchlogic_fields(row):
     data['release_side'] = row.get('RS') or row.get('Release Side')
     
     # PitchLogic specific fields
-    data['arm_slot'] = row.get('ArmSlot') or row.get('Arm Slot') or row.get('Arm Slot (yellow)')
+    # Arm slot - convert from clock time if needed
+    arm_slot_raw = row.get('ArmSlot') or row.get('Arm Slot') or row.get('Arm Slot (yellow)')
+    data['arm_slot'] = tilt_to_degrees(arm_slot_raw) if arm_slot_raw else None
+    
     data['gyro_degree'] = row.get('Gyro') or row.get('Rifle Spin (rpm)')
     
     # Calculate relative spin direction if we have both values
@@ -827,12 +847,12 @@ def main():
     # Sidebar - Database connection status
     with st.sidebar:
         st.header("Database Connection")
-        conn = get_db_connection()
 
         # Show what IP this app is running from
         my_ip = get_my_ip()
         st.info(f"🌐 This app's IP: {my_ip}")
-        
+
+        conn = get_db_connection()
         if conn:
             st.success("✅ Connected to database")
             conn.close()
@@ -966,6 +986,7 @@ def main():
                     st.warning(f"⚠️ {unmatched_count} players could not be matched")
                     auto_create = st.checkbox(
                         "Automatically create new players for unmatched names",
+                        value=True,  # Default to TRUE - auto-create by default
                         help="New players will be created with 'R' (right-handed) as default"
                     )
                 else:
