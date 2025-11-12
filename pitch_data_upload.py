@@ -14,7 +14,7 @@ import requests
 
 # Page configuration
 st.set_page_config(
-    page_title="Data Upload (1745)",
+    page_title="Data Upload 1813",
     page_icon="⚾",
     layout="wide"
 )
@@ -630,7 +630,7 @@ def validate_pitch_data(pitch_dict):
 # ============================================
 
 def process_csv(df, player_id, data_source_name, session_id, filename, bulk_mode=False, 
-                auto_create_players=False, players_list=None):
+                auto_create_players=False, players_list=None, bulk_location=None, bulk_session_type=None):
     """Process CSV and insert pitch data
     
     Args:
@@ -642,6 +642,8 @@ def process_csv(df, player_id, data_source_name, session_id, filename, bulk_mode
         bulk_mode: If True, extract player from each row
         auto_create_players: If True, create new players when not found
         players_list: List of players for matching (required for bulk_mode)
+        bulk_location: Location for all sessions in bulk upload (optional)
+        bulk_session_type: Session type for all sessions in bulk upload (optional, defaults to "Bullpen")
     """
     conn = get_db_connection()
     if not conn:
@@ -739,9 +741,12 @@ def process_csv(df, player_id, data_source_name, session_id, filename, bulk_mode
             
             # Create session for this player
             session_date = extract_session_date(pitcher_df)
+            session_type_to_use = bulk_session_type if bulk_session_type else "Bullpen"
+            location_to_use = bulk_location if bulk_location else ""
+            
             matched_session_id = create_training_session(
-                conn, matched_player_id, session_date, "Bullpen", 
-                data_source_id, len(pitcher_df), "", None, f"Bulk upload from {filename}"
+                conn, matched_player_id, session_date, session_type_to_use, 
+                data_source_id, len(pitcher_df), location_to_use, None, f"Bulk upload from {filename}"
             )
             stats['sessions_created'] += 1
             
@@ -1132,6 +1137,35 @@ def main():
                 
                 # Session configuration for bulk
                 st.header("4️⃣ Session Configuration")
+                
+                # Ask if location and session type are the same
+                st.subheader("Session Details")
+                same_session_info = st.checkbox(
+                    "All entries have the same location and session type",
+                    value=True,
+                    help="If checked, you'll specify one location and session type for all pitches"
+                )
+                
+                bulk_location = None
+                bulk_session_type = None
+                
+                if same_session_info:
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        bulk_location = st.text_input(
+                            "Location (optional)", 
+                            placeholder="Main Field, Training Facility, etc.",
+                            key="bulk_location"
+                        )
+                    with col2:
+                        bulk_session_type = st.selectbox(
+                            "Session Type",
+                            ["Bullpen", "Live BP", "Simulated Game", "Long Toss", "Other"],
+                            key="bulk_session_type"
+                        )
+                else:
+                    st.info("Sessions will be created with default values. You can edit them later in the database.")
+                
                 col1, col2 = st.columns(2)
                 
                 with col1:
@@ -1153,35 +1187,62 @@ def main():
                 
                 # Upload button
                 st.header("5️⃣ Upload Data")
-                if st.button("🚀 Process Bulk Upload", type="primary"):
-                    with st.spinner(f"Processing {num_players} players and uploading to database..."):
-                        success, message, stats = process_csv(
-                            df, None, data_source, None, uploaded_file.name,
-                            bulk_mode=True,
-                            auto_create_players=auto_create,
-                            players_list=players
-                        )
-                        
-                        if success:
-                            st.success(message)
+                
+                # Initialize session state for upload completion
+                if 'upload_complete' not in st.session_state:
+                    st.session_state.upload_complete = False
+                
+                if not st.session_state.upload_complete:
+                    col1, col2 = st.columns([3, 1])
+                    with col1:
+                        process_button = st.button("🚀 Process Bulk Upload", type="primary", use_container_width=True)
+                    with col2:
+                        cancel_button = st.button("❌ Cancel", use_container_width=True)
+                    
+                    if cancel_button:
+                        st.session_state.upload_complete = True
+                        st.rerun()
+                    
+                    if process_button:
+                        with st.spinner(f"Processing {num_players} players and uploading to database..."):
+                            success, message, stats = process_csv(
+                                df, None, data_source, None, uploaded_file.name,
+                                bulk_mode=True,
+                                auto_create_players=auto_create,
+                                players_list=players,
+                                bulk_location=bulk_location if same_session_info else None,
+                                bulk_session_type=bulk_session_type if same_session_info else None
+                            )
                             
-                            # Show detailed breakdown
-                            if stats['players_processed']:
-                                st.subheader("📊 Upload Summary by Player")
-                                summary_data = []
-                                for pitcher_name, info in stats['players_processed'].items():
-                                    summary_data.append({
-                                        'Player': pitcher_name,
-                                        'Pitches Uploaded': info['pitches'],
-                                        'Session ID': info['session_id'],
-                                        'Player ID': info['player_id']
-                                    })
-                                summary_df = pd.DataFrame(summary_data)
-                                st.dataframe(summary_df, use_container_width=True)
-                            
-                            st.balloons()
-                        else:
-                            st.error(f"Upload failed: {message}")
+                            if success:
+                                st.success(message)
+                                
+                                # Show detailed breakdown
+                                if stats['players_processed']:
+                                    st.subheader("📊 Upload Summary by Player")
+                                    summary_data = []
+                                    for pitcher_name, info in stats['players_processed'].items():
+                                        summary_data.append({
+                                            'Player': pitcher_name,
+                                            'Pitches Uploaded': info['pitches'],
+                                            'Session ID': info['session_id'],
+                                            'Player ID': info['player_id']
+                                        })
+                                    summary_df = pd.DataFrame(summary_data)
+                                    st.dataframe(summary_df, use_container_width=True)
+                                
+                                st.balloons()
+                                st.session_state.upload_complete = True
+                                st.rerun()
+                            else:
+                                st.error(f"Upload failed: {message}")
+                else:
+                    # Show "Upload Another File" button after completion
+                    if st.button("📁 Upload Another File", type="primary", use_container_width=True):
+                        # Clear session state and rerun
+                        st.session_state.upload_complete = False
+                        st.session_state.clear()
+                        st.rerun()
             
             else:
                 # Single player mode
