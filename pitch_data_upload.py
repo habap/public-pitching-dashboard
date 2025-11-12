@@ -14,7 +14,7 @@ import requests
 
 # Page configuration
 st.set_page_config(
-    page_title="Data Upload 1813",
+    page_title="Data Upload 1829",
     page_icon="⚾",
     layout="wide"
 )
@@ -964,6 +964,20 @@ def main():
     st.title("⚾ Pitching Data CSV Upload")
     st.markdown("Upload CSV files from Rapsodo, PitchLogic, or Trackman")
     
+    # Initialize session state
+    if 'uploaded_file' not in st.session_state:
+        st.session_state.uploaded_file = None
+    if 'df' not in st.session_state:
+        st.session_state.df = None
+    if 'detected_source' not in st.session_state:
+        st.session_state.detected_source = None
+    if 'upload_mode_selected' not in st.session_state:
+        st.session_state.upload_mode_selected = False
+    if 'bulk_mode' not in st.session_state:
+        st.session_state.bulk_mode = False
+    if 'upload_complete' not in st.session_state:
+        st.session_state.upload_complete = False
+    
     # Sidebar - Database connection status
     with st.sidebar:
         st.header("Database Connection")
@@ -1003,320 +1017,358 @@ def main():
     conn = get_db_connection()
     players = get_players(conn)
     
-    # Step 1: Upload CSV First (to detect bulk mode)
-    st.header("1️⃣ Upload CSV File")
-    uploaded_file = st.file_uploader("Choose a CSV file", type=['csv'])
-    
-    if uploaded_file is not None:
-        # Read CSV
-        try:
-            df = pd.read_csv(uploaded_file)
-            st.success(f"✅ File loaded: {len(df)} rows, {len(df.columns)} columns")
-            
-            # Detect data source
-            detected_source = detect_data_source(df)
-            st.info(f"🔍 Detected data source: **{detected_source}**")
-            
-            # Detect bulk mode
-            is_bulk, num_players = detect_bulk_mode(df, detected_source)
-            
-            # Preview data
-            with st.expander("📊 Preview Data (first 5 rows)"):
-                st.dataframe(df.head())
-            
-            # Step 2: Upload Mode Selection
-            st.header("2️⃣ Upload Mode")
-            
-            if is_bulk:
-                st.info(f"📋 **Bulk upload detected:** Found {num_players} different players in this file")
-                upload_mode = st.radio(
-                    "Choose upload mode:",
-                    ["Bulk Upload (Multiple Players)", "Single Player (Select One)"],
-                    help="Bulk mode will create sessions for each player automatically"
-                )
-                bulk_mode = upload_mode.startswith("Bulk")
-            else:
-                st.info("📋 **Single player mode:** This file contains data for one player")
-                bulk_mode = False
-            
-            # Step 3: Player Selection or Matching
-            if bulk_mode:
-                st.header("3️⃣ Player Matching")
-                st.markdown("The system will match player names from the CSV to your database")
+    # STEP 1: Upload CSV File (always shown unless upload is complete)
+    if not st.session_state.upload_complete:
+        st.header("1️⃣ Upload CSV File")
+        uploaded_file = st.file_uploader("Choose a CSV file", type=['csv'], key='file_uploader')
+        
+        if uploaded_file is not None:
+            # Only process if it's a new file
+            if st.session_state.uploaded_file != uploaded_file.name:
+                st.session_state.uploaded_file = uploaded_file.name
+                st.session_state.upload_mode_selected = False
                 
-                # Get unique players from CSV
-                pitcher_col = None
-                for col in ['Pitcher Name', 'Pitcher', 'pitcher', 'pitcher_name']:
-                    if col in df.columns:
-                        pitcher_col = col
-                        break
-                
-                # Check for separate First/Last name columns (PitchLogic format)
-                if not pitcher_col and 'First Name' in df.columns and 'Last Name' in df.columns:
-                    df['_pitcher_full_name'] = df['First Name'].astype(str) + ' ' + df['Last Name'].astype(str)
-                    pitcher_col = '_pitcher_full_name'
-                
-                if not pitcher_col:
-                    st.error("❌ Could not find pitcher name column in CSV. Please check your file format.")
+                # Read CSV
+                try:
+                    st.session_state.df = pd.read_csv(uploaded_file)
+                    df = st.session_state.df
+                    st.success(f"✅ File loaded: {len(df)} rows, {len(df.columns)} columns")
+                    
+                    # Detect data source
+                    st.session_state.detected_source = detect_data_source(df)
+                    st.info(f"🔍 Detected data source: **{st.session_state.detected_source}**")
+                    
+                    # Preview data
+                    with st.expander("📊 Preview Data (first 5 rows)"):
+                        st.dataframe(df.head())
+                    
+                except Exception as e:
+                    st.error(f"Error reading CSV file: {str(e)}")
+                    st.info("Please ensure the file is a valid CSV format.")
+                    st.session_state.uploaded_file = None
+                    st.session_state.df = None
                     return
+    
+    # STEP 2: Upload Mode Selection (only show if file is uploaded)
+    if st.session_state.df is not None and not st.session_state.upload_complete:
+        df = st.session_state.df
+        detected_source = st.session_state.detected_source
+        
+        st.header("2️⃣ Upload Mode")
+        
+        # Detect bulk mode
+        is_bulk, num_players = detect_bulk_mode(df, detected_source)
+        
+        if is_bulk:
+            st.info(f"📋 **Bulk upload detected:** Found {num_players} different players in this file")
+            upload_mode = st.radio(
+                "Choose upload mode:",
+                ["Bulk Upload (Multiple Players)", "Single Player (Select One)"],
+                help="Bulk mode will create sessions for each player automatically",
+                key='upload_mode_radio'
+            )
+            if st.button("Continue", key='mode_continue'):
+                st.session_state.bulk_mode = upload_mode.startswith("Bulk")
+                st.session_state.upload_mode_selected = True
+                st.rerun()
+        else:
+            st.info("📋 **Single player mode:** This file contains data for one player")
+            if st.button("Continue", key='mode_continue_single'):
+                st.session_state.bulk_mode = False
+                st.session_state.upload_mode_selected = True
+                st.rerun()
+    
+    # STEP 3+: Process based on mode (only show if mode is selected)
+    if st.session_state.upload_mode_selected and not st.session_state.upload_complete:
+        df = st.session_state.df
+        detected_source = st.session_state.detected_source
+        bulk_mode = st.session_state.bulk_mode
+        
+        if bulk_mode:
+            # Bulk mode - Steps 3, 4, 5
+            st.header("3️⃣ Player Matching")
+            st.markdown("The system will match player names from the CSV to your database")
+            
+            # Get unique players from CSV
+            pitcher_col = None
+            for col in ['Pitcher Name', 'Pitcher', 'pitcher', 'pitcher_name']:
+                if col in df.columns:
+                    pitcher_col = col
+                    break
+            
+            # Check for separate First/Last name columns (PitchLogic format)
+            if not pitcher_col and 'First Name' in df.columns and 'Last Name' in df.columns:
+                df['_pitcher_full_name'] = df['First Name'].astype(str) + ' ' + df['Last Name'].astype(str)
+                pitcher_col = '_pitcher_full_name'
+            
+            if not pitcher_col:
+                st.error("❌ Could not find pitcher name column in CSV. Please check your file format.")
+                conn.close()
+                return
+            
+            unique_pitchers = df[pitcher_col].unique()
+            num_players = len(unique_pitchers)
+            
+            # Show matching preview
+            st.subheader("Player Matching Preview")
+            match_data = []
+            has_duplicates = False
+            
+            for pitcher_name in unique_pitchers:
+                # Try to get external ID
+                pitcher_rows = df[df[pitcher_col] == pitcher_name]
+                first_row = pitcher_rows.iloc[0]
+                external_id = extract_external_id(first_row, detected_source)
                 
-                unique_pitchers = df[pitcher_col].unique()
-                
-                # Show matching preview
-                st.subheader("Player Matching Preview")
-                match_data = []
-                has_duplicates = False
-                
-                for pitcher_name in unique_pitchers:
-                    # Try to get external ID
-                    pitcher_rows = df[df[pitcher_col] == pitcher_name]
-                    first_row = pitcher_rows.iloc[0]
-                    external_id = extract_external_id(first_row, detected_source)
-                    
-                    matched_id, match_info = match_player_name(
-                        pitcher_name, players, external_id, detected_source
-                    )
-                    
-                    matched_player = None
-                    if matched_id:
-                        matched_player = next((p for p in players if p['player_id'] == matched_id), None)
-                    
-                    # Build match display
-                    if matched_player:
-                        display_name = format_player_display(matched_player, show_ids=bool(external_id))
-                        status = '✅ Match'
-                        if match_info and match_info.get('has_duplicates'):
-                            status = '⚠️ Multiple Matches'
-                            has_duplicates = True
-                    else:
-                        display_name = '❌ Not Found'
-                        status = '❌ No Match'
-                    
-                    match_entry = {
-                        'CSV Name': pitcher_name,
-                        'Matched Player': display_name,
-                        'Status': status
-                    }
-                    
-                    if external_id:
-                        match_entry['External ID'] = external_id
-                    
-                    match_data.append(match_entry)
-                
-                match_df = pd.DataFrame(match_data)
-                st.dataframe(match_df, use_container_width=True)
-                
-                if has_duplicates:
-                    st.warning("⚠️ **Duplicate name warning:** Some CSV names matched multiple players in your database. The system will use the best match based on name similarity and external IDs. Review the upload summary carefully.")
-                
-                unmatched_count = len([m for m in match_data if m['Status'] == '❌ No Match'])
-                
-                if unmatched_count > 0:
-                    st.warning(f"⚠️ {unmatched_count} players could not be matched")
-                    
-                    # Show which players will need to be created
-                    unmatched_names = [m['CSV Name'] for m in match_data if m['Status'] == '❌ No Match']
-                    with st.expander("📋 Players not found in database", expanded=True):
-                        for name in unmatched_names:
-                            st.write(f"• {name}")
-                    
-                    auto_create = st.checkbox(
-                        "Automatically create new players for unmatched names",
-                        value=True,  # Default to TRUE - auto-create by default
-                        help="New players will be created with 'R' (right-handed) as default"
-                    )
-                    
-                    # Show what will happen
-                    if auto_create:
-                        st.info(f"✅ **Ready to create:** {unmatched_count} new player(s) will be automatically created during upload")
-                    else:
-                        st.error(f"⚠️ **Warning:** {unmatched_count} player(s) will be skipped. Their pitches will NOT be uploaded.")
-                else:
-                    st.success("✅ All players matched successfully!")
-                    auto_create = False
-                
-                # Session configuration for bulk
-                st.header("4️⃣ Session Configuration")
-                
-                # Ask if location and session type are the same
-                st.subheader("Session Details")
-                same_session_info = st.checkbox(
-                    "All entries have the same location and session type",
-                    value=True,
-                    help="If checked, you'll specify one location and session type for all pitches"
+                matched_id, match_info = match_player_name(
+                    pitcher_name, players, external_id, detected_source
                 )
                 
-                bulk_location = None
-                bulk_session_type = None
+                matched_player = None
+                if matched_id:
+                    matched_player = next((p for p in players if p['player_id'] == matched_id), None)
                 
-                if same_session_info:
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        bulk_location = st.text_input(
-                            "Location (optional)", 
-                            placeholder="Main Field, Training Facility, etc.",
-                            key="bulk_location"
-                        )
-                    with col2:
-                        bulk_session_type = st.selectbox(
-                            "Session Type",
-                            ["Bullpen", "Live BP", "Simulated Game", "Long Toss", "Other"],
-                            key="bulk_session_type"
-                        )
+                # Build match display
+                if matched_player:
+                    display_name = format_player_display(matched_player, show_ids=bool(external_id))
+                    status = '✅ Match'
+                    if match_info and match_info.get('has_duplicates'):
+                        status = '⚠️ Multiple Matches'
+                        has_duplicates = True
                 else:
-                    st.info("Sessions will be created with default values. You can edit them later in the database.")
+                    display_name = '❌ Not Found'
+                    status = '❌ No Match'
                 
+                match_entry = {
+                    'CSV Name': pitcher_name,
+                    'Matched Player': display_name,
+                    'Status': status
+                }
+                
+                if external_id:
+                    match_entry['External ID'] = external_id
+                
+                match_data.append(match_entry)
+            
+            match_df = pd.DataFrame(match_data)
+            st.dataframe(match_df, use_container_width=True)
+            
+            if has_duplicates:
+                st.warning("⚠️ **Duplicate name warning:** Some CSV names matched multiple players in your database. The system will use the best match based on name similarity and external IDs. Review the upload summary carefully.")
+            
+            unmatched_count = len([m for m in match_data if m['Status'] == '❌ No Match'])
+            
+            if unmatched_count > 0:
+                st.warning(f"⚠️ {unmatched_count} players could not be matched")
+                
+                # Show which players will need to be created
+                unmatched_names = [m['CSV Name'] for m in match_data if m['Status'] == '❌ No Match']
+                with st.expander("📋 Players not found in database", expanded=True):
+                    for name in unmatched_names:
+                        st.write(f"• {name}")
+                
+                auto_create = st.checkbox(
+                    "Automatically create new players for unmatched names",
+                    value=True,
+                    help="New players will be created with 'R' (right-handed) as default"
+                )
+                
+                # Show what will happen
+                if auto_create:
+                    st.info(f"✅ **Ready to create:** {unmatched_count} new player(s) will be automatically created during upload")
+                else:
+                    st.error(f"⚠️ **Warning:** {unmatched_count} player(s) will be skipped. Their pitches will NOT be uploaded.")
+            else:
+                st.success("✅ All players matched successfully!")
+                auto_create = False
+            
+            # Session configuration for bulk
+            st.header("4️⃣ Session Configuration")
+            
+            # Ask if location and session type are the same
+            st.subheader("Session Details")
+            same_session_info = st.checkbox(
+                "All entries have the same location and session type",
+                value=True,
+                help="If checked, you'll specify one location and session type for all pitches"
+            )
+            
+            bulk_location = None
+            bulk_session_type = None
+            
+            if same_session_info:
                 col1, col2 = st.columns(2)
-                
                 with col1:
-                    data_sources = get_data_sources(conn)
-                    source_options = {ds['source_name']: ds['source_id'] for ds in data_sources}
-                    
-                    default_idx = 0
-                    if detected_source in source_options:
-                        default_idx = list(source_options.keys()).index(detected_source)
-                    
-                    data_source = st.selectbox(
-                        "Data Source",
-                        list(source_options.keys()),
-                        index=default_idx
+                    bulk_location = st.text_input(
+                        "Location (optional)", 
+                        placeholder="Main Field, Training Facility, etc.",
+                        key="bulk_location"
                     )
-                
                 with col2:
-                    st.info("Sessions will be created automatically for each player")
+                    bulk_session_type = st.selectbox(
+                        "Session Type",
+                        ["Bullpen", "Live BP", "Simulated Game", "Long Toss", "Other"],
+                        key="bulk_session_type"
+                    )
+            else:
+                st.info("Sessions will be created with default values. You can edit them later in the database.")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                data_sources = get_data_sources(conn)
+                source_options = {ds['source_name']: ds['source_id'] for ds in data_sources}
                 
-                # Upload button
-                st.header("5️⃣ Upload Data")
+                default_idx = 0
+                if detected_source in source_options:
+                    default_idx = list(source_options.keys()).index(detected_source)
                 
-                # Initialize session state for upload completion
-                if 'upload_complete' not in st.session_state:
-                    st.session_state.upload_complete = False
-                
-                if not st.session_state.upload_complete:
-                    col1, col2 = st.columns([3, 1])
-                    with col1:
-                        process_button = st.button("🚀 Process Bulk Upload", type="primary", use_container_width=True)
-                    with col2:
-                        cancel_button = st.button("❌ Cancel", use_container_width=True)
+                data_source = st.selectbox(
+                    "Data Source",
+                    list(source_options.keys()),
+                    index=default_idx
+                )
+            
+            with col2:
+                st.info("Sessions will be created automatically for each player")
+            
+            # Upload buttons
+            st.header("5️⃣ Upload Data")
+            
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                process_button = st.button("🚀 Process Bulk Upload", type="primary", use_container_width=True)
+            with col2:
+                cancel_button = st.button("❌ Cancel", use_container_width=True)
+            
+            if cancel_button:
+                st.session_state.upload_complete = True
+                st.rerun()
+            
+            if process_button:
+                with st.spinner(f"Processing {num_players} players and uploading to database..."):
+                    success, message, stats = process_csv(
+                        df, None, data_source, None, st.session_state.uploaded_file,
+                        bulk_mode=True,
+                        auto_create_players=auto_create,
+                        players_list=players,
+                        bulk_location=bulk_location if same_session_info else None,
+                        bulk_session_type=bulk_session_type if same_session_info else None
+                    )
                     
-                    if cancel_button:
+                    if success:
+                        st.success(message)
+                        
+                        # Show detailed breakdown
+                        if stats['players_processed']:
+                            st.subheader("📊 Upload Summary by Player")
+                            summary_data = []
+                            for pitcher_name, info in stats['players_processed'].items():
+                                summary_data.append({
+                                    'Player': pitcher_name,
+                                    'Pitches Uploaded': info['pitches'],
+                                    'Session ID': info['session_id'],
+                                    'Player ID': info['player_id']
+                                })
+                            summary_df = pd.DataFrame(summary_data)
+                            st.dataframe(summary_df, use_container_width=True)
+                        
+                        st.balloons()
                         st.session_state.upload_complete = True
                         st.rerun()
-                    
-                    if process_button:
-                        with st.spinner(f"Processing {num_players} players and uploading to database..."):
-                            success, message, stats = process_csv(
-                                df, None, data_source, None, uploaded_file.name,
-                                bulk_mode=True,
-                                auto_create_players=auto_create,
-                                players_list=players,
-                                bulk_location=bulk_location if same_session_info else None,
-                                bulk_session_type=bulk_session_type if same_session_info else None
-                            )
-                            
-                            if success:
-                                st.success(message)
-                                
-                                # Show detailed breakdown
-                                if stats['players_processed']:
-                                    st.subheader("📊 Upload Summary by Player")
-                                    summary_data = []
-                                    for pitcher_name, info in stats['players_processed'].items():
-                                        summary_data.append({
-                                            'Player': pitcher_name,
-                                            'Pitches Uploaded': info['pitches'],
-                                            'Session ID': info['session_id'],
-                                            'Player ID': info['player_id']
-                                        })
-                                    summary_df = pd.DataFrame(summary_data)
-                                    st.dataframe(summary_df, use_container_width=True)
-                                
-                                st.balloons()
-                                st.session_state.upload_complete = True
-                                st.rerun()
-                            else:
-                                st.error(f"Upload failed: {message}")
-                else:
-                    # Show "Upload Another File" button after completion
-                    if st.button("📁 Upload Another File", type="primary", use_container_width=True):
-                        # Clear session state and rerun
-                        st.session_state.upload_complete = False
-                        st.session_state.clear()
-                        st.rerun()
-            
-            else:
-                # Single player mode
-                st.header("3️⃣ Select Player")
-                
-                if not players:
-                    st.warning("No active players found. Please add players to the database first.")
-                    conn.close()
-                    return
-                
-                player_options = {f"{p['player_name']} ({p['graduation_year']})": p['player_id'] 
-                                 for p in players}
-                
-                selected_player = st.selectbox("Choose a player", list(player_options.keys()))
-                player_id = player_options[selected_player]
-                
-                # Step 4: Configure Session
-                st.header("4️⃣ Session Details")
-                
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    session_date = st.date_input("Session Date", value=datetime.now())
-                    session_type = st.selectbox(
-                        "Session Type",
-                        ["Bullpen", "Live BP", "Simulated Game", "Long Toss", "Other"]
-                    )
-                
-                with col2:
-                    data_sources = get_data_sources(conn)
-                    source_options = {ds['source_name']: ds['source_id'] for ds in data_sources}
-                    
-                    # Pre-select detected source if found
-                    default_idx = 0
-                    if detected_source in source_options:
-                        default_idx = list(source_options.keys()).index(detected_source)
-                    
-                    data_source = st.selectbox(
-                        "Data Source",
-                        list(source_options.keys()),
-                        index=default_idx
-                    )
-                
-                location = st.text_input("Location (optional)", placeholder="Main Field, Training Facility, etc.")
-                session_focus = st.text_area("Session Focus (optional)", 
-                                            placeholder="What was the focus of this session?")
-                
-                # Step 5: Process and Upload
-                st.header("5️⃣ Upload Data")
-                
-                if st.button("🚀 Process and Upload", type="primary"):
-                    with st.spinner("Processing CSV and uploading to database..."):
-                        # Create training session
-                        session_id = create_training_session(
-                            conn, player_id, session_date, session_type, 
-                            source_options[data_source], len(df), 
-                            location, None, session_focus
-                        )
-                        
-                        # Process CSV
-                        success, message, stats = process_csv(
-                            df, player_id, data_source, session_id, uploaded_file.name,
-                            bulk_mode=False
-                        )
-                        
-                        if success:
-                            st.success(message)
-                            st.balloons()
-                        else:
-                            st.error(f"Upload failed: {message}")
+                    else:
+                        st.error(f"Upload failed: {message}")
         
-        except Exception as e:
-            st.error(f"Error reading CSV file: {str(e)}")
-            st.info("Please ensure the file is a valid CSV format.")
+        else:
+            # Single player mode - Steps 3, 4, 5
+            st.header("3️⃣ Select Player")
+            
+            if not players:
+                st.warning("No active players found. Please add players to the database first.")
+                conn.close()
+                return
+            
+            player_options = {f"{p['player_name']} ({p['graduation_year']})": p['player_id'] 
+                             for p in players}
+            
+            selected_player = st.selectbox("Choose a player", list(player_options.keys()))
+            player_id = player_options[selected_player]
+            
+            # Step 4: Configure Session
+            st.header("4️⃣ Session Details")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                session_date = st.date_input("Session Date", value=datetime.now())
+                session_type = st.selectbox(
+                    "Session Type",
+                    ["Bullpen", "Live BP", "Simulated Game", "Long Toss", "Other"]
+                )
+            
+            with col2:
+                data_sources = get_data_sources(conn)
+                source_options = {ds['source_name']: ds['source_id'] for ds in data_sources}
+                
+                # Pre-select detected source if found
+                default_idx = 0
+                if detected_source in source_options:
+                    default_idx = list(source_options.keys()).index(detected_source)
+                
+                data_source = st.selectbox(
+                    "Data Source",
+                    list(source_options.keys()),
+                    index=default_idx
+                )
+            
+            location = st.text_input("Location (optional)", placeholder="Main Field, Training Facility, etc.")
+            session_focus = st.text_area("Session Focus (optional)", 
+                                        placeholder="What was the focus of this session?")
+            
+            # Step 5: Process and Upload
+            st.header("5️⃣ Upload Data")
+            
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                process_button = st.button("🚀 Process and Upload", type="primary", use_container_width=True)
+            with col2:
+                cancel_button = st.button("❌ Cancel", use_container_width=True)
+            
+            if cancel_button:
+                st.session_state.upload_complete = True
+                st.rerun()
+            
+            if process_button:
+                with st.spinner("Processing CSV and uploading to database..."):
+                    # Create training session
+                    session_id = create_training_session(
+                        conn, player_id, session_date, session_type, 
+                        source_options[data_source], len(df), 
+                        location, None, session_focus
+                    )
+                    
+                    # Process CSV
+                    success, message, stats = process_csv(
+                        df, player_id, data_source, session_id, st.session_state.uploaded_file,
+                        bulk_mode=False
+                    )
+                    
+                    if success:
+                        st.success(message)
+                        st.balloons()
+                        st.session_state.upload_complete = True
+                        st.rerun()
+                    else:
+                        st.error(f"Upload failed: {message}")
+    
+    # Show "Upload Another File" button after completion
+    if st.session_state.upload_complete:
+        st.success("✅ Upload completed successfully!")
+        if st.button("📁 Upload Another File", type="primary", use_container_width=True):
+            # Clear all session state
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
+            st.rerun()
     
     conn.close()
 
