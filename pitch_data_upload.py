@@ -333,20 +333,22 @@ def tilt_to_degrees(tilt_str):
 def detect_data_source(df):
     """Detect data source from CSV headers"""
     columns = [col.lower().strip() for col in df.columns]
+    columns_joined = ' '.join(columns)
     
     # Rapsodo indicators
     rapsodo_indicators = ['relspeed', 'inducedvertbreak', 'tilt']
-    if any(ind in ' '.join(columns) for ind in rapsodo_indicators):
+    if any(ind in columns_joined for ind in rapsodo_indicators):
         return 'Rapsodo'
     
-    # PitchLogic indicators  
-    pitchlogic_indicators = ['armslot', 'gyro']
-    if any(ind in ' '.join(columns) for ind in pitchlogic_indicators):
+    # PitchLogic indicators - handle various formats with/without spaces
+    # Look for: "arm slot", "armslot", "gyro", "rifle spin"
+    pitchlogic_indicators = ['arm slot', 'armslot', 'rifle spin', 'gyro']
+    if any(ind in columns_joined for ind in pitchlogic_indicators):
         return 'PitchLogic'
     
     # Trackman indicators
     trackman_indicators = ['vertreangle', 'horzreangle', 'pitchcall', 'zonespeed']
-    if any(ind in ' '.join(columns) for ind in trackman_indicators):
+    if any(ind in columns_joined for ind in trackman_indicators):
         return 'Trackman'
     
     return 'Unknown'
