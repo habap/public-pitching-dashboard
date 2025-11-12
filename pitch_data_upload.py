@@ -10,6 +10,7 @@ from mysql.connector import Error
 import json
 from datetime import datetime
 import re
+import requests
 
 # Page configuration
 st.set_page_config(
@@ -45,6 +46,14 @@ def get_db_connection():
     except Error as e:
         st.error(f"Error connecting to MySQL: {e}")
         return None
+
+def get_my_ip():
+    """Get the public IP address of this Streamlit Cloud instance"""
+    try:
+        response = requests.get('https://api.ipify.org?format=json', timeout=5)
+        return response.json()['ip']
+    except:
+        return "Could not determine IP"
 
 def get_players(conn):
     """Retrieve all active players"""
@@ -775,6 +784,12 @@ def main():
     # Sidebar - Database connection status
     with st.sidebar:
         st.header("Database Connection")
+
+        # Show what IP this app is running from
+        my_ip = get_my_ip()
+        st.info(f"🌐 This app's IP: {my_ip}")
+        st.caption("Add this IP to Cloudways MySQL whitelist!")
+
         conn = get_db_connection()
         if conn:
             st.success("✅ Connected to database")
