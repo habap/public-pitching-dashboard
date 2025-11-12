@@ -197,10 +197,35 @@ def format_player_display(player, show_ids=False):
     return name
 
 def create_player_from_name(conn, pitcher_name, external_id=None, data_source=None):
-    """Create a new player record from pitcher name and optional external ID"""
-    names = pitcher_name.strip().split()
-    first_name = names[0] if len(names) > 0 else "Unknown"
-    last_name = names[-1] if len(names) > 1 else "Player"
+    """Create a new player record from pitcher name and optional external ID
+    
+    Args:
+        conn: Database connection
+        pitcher_name: Full name string (e.g., "Silas Findley" or "John Paul Smith")
+        external_id: Optional external system ID
+        data_source: Optional data source name (Rapsodo, PitchLogic, Trackman)
+    
+    Returns:
+        int: New player_id
+    """
+    # Parse the name - handle various formats
+    pitcher_name = str(pitcher_name).strip()
+    names = pitcher_name.split()
+    
+    if len(names) == 0:
+        first_name = "Unknown"
+        last_name = "Player"
+    elif len(names) == 1:
+        first_name = names[0]
+        last_name = "Unknown"
+    elif len(names) == 2:
+        first_name = names[0]
+        last_name = names[1]
+    else:
+        # For names with 3+ parts (e.g., "John Paul Smith"), 
+        # take first as first_name, rest as last_name
+        first_name = names[0]
+        last_name = ' '.join(names[1:])
     
     cursor = conn.cursor()
     
@@ -220,7 +245,9 @@ def create_player_from_name(conn, pitcher_name, external_id=None, data_source=No
         cursor.execute(query, (first_name, last_name))
     
     conn.commit()
-    return cursor.lastrowid
+    player_id = cursor.lastrowid
+    
+    return player_id
 
 def get_data_sources(conn):
     """Retrieve all data sources"""
@@ -271,20 +298,32 @@ def standardize_pitch_type(pitch_type):
 # ============================================
 
 def tilt_to_degrees(tilt_str):
-    """Convert clock tilt (e.g., '1:30') to degrees"""
+    """Convert clock tilt (e.g., '1:30' or '12:40') to degrees"""
     if pd.isna(tilt_str) or tilt_str == '':
         return None
     try:
         tilt_str = str(tilt_str).strip()
-        # Handle "1:30" format
-        if ':' in tilt_str:
-            hours, minutes = map(int, tilt_str.split(':'))
-            degrees = ((hours * 30) + (minutes / 2)) % 360
-            return degrees
-        # Handle decimal format (already in degrees)
-        else:
+        
+        # If it's already a number, return it
+        try:
             return float(tilt_str)
-    except:
+        except:
+            pass
+        
+        # Handle "1:30" format (clock time)
+        if ':' in tilt_str:
+            parts = tilt_str.split(':')
+            hours = int(parts[0])
+            minutes = int(parts[1])
+            
+            # Convert to degrees: each hour = 30°, each minute = 0.5°
+            degrees = ((hours % 12) * 30 + (minutes / 2)) % 360
+            return degrees
+        
+        # If no colon, try to parse as decimal
+        return float(tilt_str)
+    except Exception as e:
+        # If all parsing fails, return None
         return None
 
 # ============================================
@@ -382,8 +421,13 @@ def map_pitchlogic_fields(row):
     data['release_speed'] = row.get('Velo') or row.get('Speed') or row.get('Speed (mph)')
     data['spin_rate'] = (row.get('Spin') or row.get('SpinRate') or row.get('Spin Rate') or 
                          row.get('Total Spin (rpm)'))
-    data['spin_axis'] = (row.get('Axis') or row.get('SpinAxis') or row.get('Spin Axis') or
-                         row.get('Spin Direction (blue)'))
+    
+    # Spin axis - convert from clock time if needed
+    spin_axis_raw = (row.get('Axis') or row.get('SpinAxis') or row.get('Spin Axis') or
+                     row.get('Spin Direction (blue)'))
+    data['spin_axis'] = tilt_to_degrees(spin_axis_raw) if spin_axis_raw else None
+    
+    # Movement fields
     data['horizontal_break'] = (row.get('HB') or row.get('Horizontal Break') or 
                                 row.get('Horizontal Movement (in)'))
     data['vertical_break'] = (row.get('VB') or row.get('Vertical Break') or 
@@ -392,7 +436,10 @@ def map_pitchlogic_fields(row):
     data['release_side'] = row.get('RS') or row.get('Release Side')
     
     # PitchLogic specific fields
-    data['arm_slot'] = row.get('ArmSlot') or row.get('Arm Slot') or row.get('Arm Slot (yellow)')
+    # Arm slot - convert from clock time if needed
+    arm_slot_raw = row.get('ArmSlot') or row.get('Arm Slot') or row.get('Arm Slot (yellow)')
+    data['arm_slot'] = tilt_to_degrees(arm_slot_raw) if arm_slot_raw else None
+    
     data['gyro_degree'] = row.get('Gyro') or row.get('Rifle Spin (rpm)')
     
     # Calculate relative spin direction if we have both values
@@ -590,12 +637,22 @@ def process_csv(df, player_id, data_source_name, session_id, filename, bulk_mode
                 stats['errors'].append(duplicate_warning)
             
             if not matched_player_id and auto_create_players:
-                matched_player_id = create_player_from_name(
-                    conn, pitcher_name, external_id, data_source_name
-                )
-                stats['players_created'] += 1
-                id_info = f" (ID: {external_id})" if external_id else ""
-                st.info(f"Created new player: {pitcher_name}{id_info} → Database ID: {matched_player_id}")
+                try:
+                    matched_player_id = create_player_from_name(
+                        conn, pitcher_name, external_id, data_source_name
+                    )
+                    stats['players_created'] += 1
+                    id_info = f" (ID: {external_id})" if external_id else ""
+                    st.info(f"✅ Created new player: {pitcher_name}{id_info} → Database ID: {matched_player_id}")
+                except Exception as e:
+                    error_msg = f"❌ Failed to create player '{pitcher_name}': {str(e)}"
+                    stats['errors'].append(error_msg)
+                    st.error(error_msg)
+                    matched_player_id = None
+            elif not matched_player_id and not auto_create_players:
+                # Player not found and auto-create is disabled
+                skip_msg = f"⚠️ Skipped player '{pitcher_name}' - not found in database and auto-create disabled"
+                stats['errors'].append(skip_msg)
             
             if not matched_player_id:
                 stats['skipped'] += len(pitcher_df)
@@ -827,12 +884,12 @@ def main():
     # Sidebar - Database connection status
     with st.sidebar:
         st.header("Database Connection")
-        conn = get_db_connection()
 
         # Show what IP this app is running from
         my_ip = get_my_ip()
         st.info(f"🌐 This app's IP: {my_ip}")
-        
+
+        conn = get_db_connection()
         if conn:
             st.success("✅ Connected to database")
             conn.close()
@@ -964,10 +1021,24 @@ def main():
                 
                 if unmatched_count > 0:
                     st.warning(f"⚠️ {unmatched_count} players could not be matched")
+                    
+                    # Show which players will need to be created
+                    unmatched_names = [m['CSV Name'] for m in match_data if m['Status'] == '❌ No Match']
+                    with st.expander("📋 Players not found in database", expanded=True):
+                        for name in unmatched_names:
+                            st.write(f"• {name}")
+                    
                     auto_create = st.checkbox(
                         "Automatically create new players for unmatched names",
+                        value=True,  # Default to TRUE - auto-create by default
                         help="New players will be created with 'R' (right-handed) as default"
                     )
+                    
+                    # Show what will happen
+                    if auto_create:
+                        st.info(f"✅ **Ready to create:** {unmatched_count} new player(s) will be automatically created during upload")
+                    else:
+                        st.error(f"⚠️ **Warning:** {unmatched_count} player(s) will be skipped. Their pitches will NOT be uploaded.")
                 else:
                     st.success("✅ All players matched successfully!")
                     auto_create = False
