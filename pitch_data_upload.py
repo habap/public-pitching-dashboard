@@ -36,11 +36,7 @@ DB_CONFIG = {
 def get_db_connection():
     """Create database connection"""
     try:
-        config = DB_CONFIG.copy()
-        config['connection_timeout'] = 30  # Wait 30 seconds
-        config['connect_timeout'] = 30
-        
-        connection = mysql.connector.connect(**config)
+        connection = mysql.connector.connect(**DB_CONFIG)
         if connection.is_connected():
             return connection
     except Error as e:
@@ -319,10 +315,16 @@ def detect_data_source(df):
 def detect_bulk_mode(df, data_source):
     """Detect if CSV contains multiple players"""
     if data_source == 'PitchLogic':
-        # PitchLogic has pitcher name on each row
+        # PitchLogic can have pitcher name in different formats
         if 'Pitcher Name' in df.columns or 'Pitcher' in df.columns:
             pitcher_col = 'Pitcher Name' if 'Pitcher Name' in df.columns else 'Pitcher'
             unique_pitchers = df[pitcher_col].nunique()
+            return unique_pitchers > 1, unique_pitchers
+        # Check for separate First Name / Last Name columns
+        elif 'First Name' in df.columns and 'Last Name' in df.columns:
+            # Create combined name and check uniqueness
+            df['_temp_full_name'] = df['First Name'].astype(str) + ' ' + df['Last Name'].astype(str)
+            unique_pitchers = df['_temp_full_name'].nunique()
             return unique_pitchers > 1, unique_pitchers
     
     elif data_source == 'Rapsodo':
@@ -376,25 +378,36 @@ def map_pitchlogic_fields(row):
     """Map PitchLogic CSV fields to database fields"""
     data = {}
     
-    # Basic fields
-    data['release_speed'] = row.get('Velo') or row.get('Speed')
-    data['spin_rate'] = row.get('Spin') or row.get('SpinRate') or row.get('Spin Rate')
-    data['spin_axis'] = row.get('Axis') or row.get('SpinAxis') or row.get('Spin Axis')
-    data['horizontal_break'] = row.get('HB') or row.get('Horizontal Break')
-    data['vertical_break'] = row.get('VB') or row.get('Vertical Break')
+    # Basic fields - handle various PitchLogic naming conventions
+    data['release_speed'] = row.get('Velo') or row.get('Speed') or row.get('Speed (mph)')
+    data['spin_rate'] = (row.get('Spin') or row.get('SpinRate') or row.get('Spin Rate') or 
+                         row.get('Total Spin (rpm)'))
+    data['spin_axis'] = (row.get('Axis') or row.get('SpinAxis') or row.get('Spin Axis') or
+                         row.get('Spin Direction (blue)'))
+    data['horizontal_break'] = (row.get('HB') or row.get('Horizontal Break') or 
+                                row.get('Horizontal Movement (in)'))
+    data['vertical_break'] = (row.get('VB') or row.get('Vertical Break') or 
+                              row.get('Vertical Movement (in)'))
     data['release_height'] = row.get('RH') or row.get('Release Height')
     data['release_side'] = row.get('RS') or row.get('Release Side')
     
-    # PitchLogic specific
-    data['arm_slot'] = row.get('ArmSlot') or row.get('Arm Slot')
-    data['gyro_degree'] = row.get('Gyro')
+    # PitchLogic specific fields
+    data['arm_slot'] = row.get('ArmSlot') or row.get('Arm Slot') or row.get('Arm Slot (yellow)')
+    data['gyro_degree'] = row.get('Gyro') or row.get('Rifle Spin (rpm)')
     
     # Calculate relative spin direction if we have both values
     if pd.notna(data.get('spin_axis')) and pd.notna(data.get('arm_slot')):
-        data['relative_spin_direction'] = abs(float(data['spin_axis']) - float(data['arm_slot']))
+        try:
+            data['relative_spin_direction'] = abs(float(data['spin_axis']) - float(data['arm_slot']))
+        except:
+            pass
     
-    # Spin efficiency (if present)
-    data['spin_efficiency'] = row.get('SpinEff') or row.get('Spin Efficiency')
+    # Spin efficiency
+    data['spin_efficiency'] = row.get('SpinEff') or row.get('Spin Efficiency') or row.get('Spin Efficiency (%)')
+    
+    # Additional PitchLogic fields
+    data['release_extension'] = (row.get('Forward Extension (ft)') or 
+                                 row.get('Extension'))
     
     return data
 
@@ -539,10 +552,18 @@ def process_csv(df, player_id, data_source_name, session_id, filename, bulk_mode
     if bulk_mode:
         # Determine pitcher name column
         pitcher_col = None
+        combine_names = False
+        
         for col in ['Pitcher Name', 'Pitcher', 'pitcher', 'pitcher_name']:
             if col in df.columns:
                 pitcher_col = col
                 break
+        
+        # Check for separate First/Last name columns (PitchLogic format)
+        if not pitcher_col and 'First Name' in df.columns and 'Last Name' in df.columns:
+            df['_pitcher_full_name'] = df['First Name'].astype(str) + ' ' + df['Last Name'].astype(str)
+            pitcher_col = '_pitcher_full_name'
+            combine_names = True
         
         if not pitcher_col:
             return False, "Bulk mode enabled but no pitcher column found in CSV", stats
@@ -671,8 +692,13 @@ def process_pitcher_data(conn, df, player_id, data_source_name, data_source_id, 
             else:
                 pitch_data = {}
             
-            # Extract common fields
-            pitch_type = standardize_pitch_type(row.get('TaggedPitchType') or row.get('Pitch Type') or row.get('PitchType'))
+            # Extract common fields - handle multiple naming conventions
+            pitch_type = standardize_pitch_type(
+                row.get('TaggedPitchType') or 
+                row.get('Pitch Type') or 
+                row.get('PitchType') or
+                row.get('Type')  # PitchLogic uses just 'Type'
+            )
             pitch_number = row.get('PitchNo') or row.get('Pitch #') or row.get('Pitch') or (idx + 1)
             
             # Handle date/time
@@ -688,9 +714,26 @@ def process_pitcher_data(conn, df, player_id, data_source_name, data_source_id, 
             # Validate data
             quality_score, issues = validate_pitch_data(pitch_data)
             
-            # Store raw data as JSON
+            # Store raw data as JSON - ensure it's valid
             raw_data = row.to_dict()
-            raw_json = json.dumps(raw_data, default=str)
+            # Remove any NaN or inf values that can't be serialized
+            raw_data_clean = {}
+            for k, v in raw_data.items():
+                if pd.isna(v):
+                    raw_data_clean[k] = None
+                elif isinstance(v, (int, float)):
+                    if pd.isna(v) or v == float('inf') or v == float('-inf'):
+                        raw_data_clean[k] = None
+                    else:
+                        raw_data_clean[k] = float(v) if isinstance(v, float) else int(v)
+                else:
+                    raw_data_clean[k] = str(v)
+            
+            try:
+                raw_json = json.dumps(raw_data_clean, default=str)
+            except Exception as e:
+                # If JSON serialization fails, store minimal data
+                raw_json = json.dumps({'error': 'Could not serialize', 'row': idx}, default=str)
             
             # Build insert query
             query = """
@@ -784,24 +827,18 @@ def main():
     # Sidebar - Database connection status
     with st.sidebar:
         st.header("Database Connection")
+        conn = get_db_connection()
 
         # Show what IP this app is running from
         my_ip = get_my_ip()
         st.info(f"🌐 This app's IP: {my_ip}")
-        st.caption("Add this IP to Cloudways MySQL whitelist!")
-
-        conn = get_db_connection()
+        
         if conn:
             st.success("✅ Connected to database")
             conn.close()
         else:
             st.error("❌ Database connection failed")
-            # Add debug info
-            st.write("Debug Info:")
-            st.write(f"Host: {st.secrets['DB_HOST']}")
-            st.write(f"Database: {st.secrets['DB_NAME']}")
-            st.write(f"User: {st.secrets['DB_USER']}")
-            st.write(f"Port: {st.secrets['DB_PORT']}")
+            st.info("Check your database configuration in secrets.toml")
             return
         
         st.markdown("---")
