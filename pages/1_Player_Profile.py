@@ -86,7 +86,9 @@ def get_player_sessions(conn, player_id):
         LEFT JOIN data_sources ds ON ts.source_id = ds.source_id
         LEFT JOIN coaches c ON ts.coach_id = c.coach_id
         WHERE ts.player_id = %s
-        GROUP BY ts.session_id
+        GROUP BY ts.session_id, ts.session_date, ts.session_type,
+                 ts.location, ts.session_focus, ts.duration_minutes,
+                 ds.source_name, c.first_name, c.last_name, c.coach_id
         ORDER BY ts.session_date DESC, ts.session_id DESC
     """, (player_id,))
     return cursor.fetchall()
@@ -160,8 +162,26 @@ def main():
     player_options = {f"{p['player_name']} ({p['graduation_year']})": p['player_id'] 
                      for p in players}
     
-    selected_player = st.selectbox("Select a player", list(player_options.keys()))
+    # Check if a player was pre-selected (from Session or Pitch Detail page)
+    selected_player_id = st.session_state.get('selected_player_id')
+    
+    # If there's a pre-selected player, use it as default
+    if selected_player_id and selected_player_id in player_options.values():
+        # Find the index of the selected player
+        default_index = list(player_options.values()).index(selected_player_id)
+    else:
+        default_index = 0
+    
+    selected_player = st.selectbox(
+        "Select a player", 
+        list(player_options.keys()),
+        index=default_index
+    )
     player_id = player_options[selected_player]
+    
+    # Clear the selected player from state after using it
+    if 'selected_player_id' in st.session_state:
+        del st.session_state['selected_player_id']
     
     # Get player details
     player = get_player_details(conn, player_id)
@@ -210,27 +230,44 @@ def main():
         sessions = get_player_sessions(conn, player_id)
         
         if sessions:
-            session_data = []
+            # Display sessions in a more interactive format
             for session in sessions:
-                session_data.append({
-                    'Session ID': session['session_id'],
-                    'Date': session['session_date'].strftime('%m/%d/%Y'),
-                    'Type': session['session_type'],
-                    'Location': session['location'] or 'N/A',
-                    'Coach': session['coach_name'] or 'N/A',
-                    'Pitches': session['pitch_count'],
-                    'Avg Velocity': f"{session['avg_velocity']:.1f}" if session['avg_velocity'] else 'N/A',
-                    'Max Velocity': f"{session['max_velocity']:.1f}" if session['max_velocity'] else 'N/A',
-                    'Avg Spin': f"{session['avg_spin']:.0f}" if session['avg_spin'] else 'N/A',
-                    'Data Source': session['source_name']
-                })
+                with st.container():
+                    col1, col2, col3, col4, col5 = st.columns([1, 2, 2, 3, 1])
+                    
+                    with col1:
+                        st.write(f"**{session['session_date'].strftime('%m/%d/%Y')}**")
+                    
+                    with col2:
+                        st.write(f"{session['session_type']}")
+                        st.caption(f"{session['location'] or 'N/A'}")
+                    
+                    with col3:
+                        st.write(f"Coach: {session['coach_name'] or 'N/A'}")
+                        st.caption(f"Source: {session['source_name']}")
+                    
+                    with col4:
+                        metrics_text = []
+                        if session['pitch_count']:
+                            metrics_text.append(f"**{session['pitch_count']}** pitches")
+                        if session['avg_velocity']:
+                            metrics_text.append(f"Avg: **{session['avg_velocity']:.1f}** mph")
+                        if session['max_velocity']:
+                            metrics_text.append(f"Max: **{session['max_velocity']:.1f}** mph")
+                        if session['avg_spin']:
+                            metrics_text.append(f"Spin: **{session['avg_spin']:.0f}** rpm")
+                        st.write(" | ".join(metrics_text) if metrics_text else "No pitch data")
+                    
+                    with col5:
+                        if st.button("View", key=f"session_{session['session_id']}", use_container_width=True):
+                            # Store the selected session ID in session state
+                            st.session_state['selected_session_id'] = session['session_id']
+                            # Navigate to Session Detail page
+                            st.switch_page("pages/2_Session_Detail.py")
+                    
+                    st.divider()
             
-            df = pd.DataFrame(session_data)
-            
-            # Make session ID clickable (show as link)
-            st.dataframe(df, use_container_width=True, hide_index=True)
-            
-            st.info("💡 Tip: Go to the Session Detail page to view individual session details")
+            st.info("💡 Tip: Click 'View' to see detailed session information")
         else:
             st.info("No sessions found for this player")
     
