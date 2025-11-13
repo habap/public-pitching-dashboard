@@ -83,7 +83,7 @@ def get_player_sessions(conn, player_id):
                c.coach_id
         FROM training_sessions ts
         LEFT JOIN pitch_data pd ON ts.session_id = pd.session_id
-        LEFT JOIN data_sources ds ON ts.source_id = ds.source_id
+        LEFT JOIN data_sources ds ON ts.data_source_id = ds.source_id
         LEFT JOIN coaches c ON ts.coach_id = c.coach_id
         WHERE ts.player_id = %s
         GROUP BY ts.session_id, ts.session_date, ts.session_type,
@@ -101,7 +101,7 @@ def get_player_pitch_data(conn, player_id, limit=100):
                ds.source_name
         FROM pitch_data pd
         JOIN training_sessions ts ON pd.session_id = ts.session_id
-        JOIN data_sources ds ON ts.source_id = ds.source_id
+        JOIN data_sources ds ON ts.data_source_id = ds.source_id
         WHERE ts.player_id = %s
         ORDER BY ts.session_date DESC, pd.pitch_number
         LIMIT %s
