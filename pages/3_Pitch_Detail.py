@@ -46,7 +46,7 @@ def get_pitch_details(conn, pitch_id):
                p.player_id, p.graduation_year, p.throws_hand,
                CONCAT(c.first_name, ' ', c.last_name) as coach_name,
                c.coach_id,
-               ds.source_name, ds.source_type
+               ds.source_name
         FROM pitch_data pd
         JOIN training_sessions ts ON pd.session_id = ts.session_id
         JOIN players p ON ts.player_id = p.player_id
