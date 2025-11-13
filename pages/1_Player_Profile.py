@@ -44,7 +44,7 @@ def get_all_players(conn):
         SELECT player_id, first_name, last_name,
                CONCAT(first_name, ' ', last_name) AS player_name,
                graduation_year, throws_hand, bats_hand, 
-               email, phone, parent_guardian_email
+               email, phone, parent_email
         FROM players 
         WHERE is_active = TRUE
         ORDER BY last_name, first_name
@@ -219,8 +219,8 @@ def main():
             st.write(f"**Email:** {player['email']}")
         if player.get('phone'):
             st.write(f"**Phone:** {player['phone']}")
-        if player.get('parent_guardian_email'):
-            st.write(f"**Parent Email:** {player['parent_guardian_email']}")
+        if player.get('parent_email'):
+            st.write(f"**Parent Email:** {player['parent_email']}")
     
     # Tabs for different views
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["📅 Sessions", "⚾ Pitches", "👨‍🏫 Coaches", "📍 Locations", "📊 Analytics"])
