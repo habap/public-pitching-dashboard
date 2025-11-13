@@ -63,7 +63,7 @@ def get_session_details(conn, session_id):
     cursor.execute("""
         SELECT ts.session_id, ts.player_id, ts.coach_id, ts.session_date,
                ts.session_type, ts.location, ts.session_focus, 
-               ts.duration_minutes, ts.notes, ts.source_id, ts.created_at,
+               ts.duration_minutes, ts.coach_notes, ts.source_id, ts.created_at,
                CONCAT(p.first_name, ' ', p.last_name) as player_name,
                p.graduation_year, p.throws_hand,
                CONCAT(c.first_name, ' ', c.last_name) as coach_name,
@@ -83,7 +83,7 @@ def get_session_details(conn, session_id):
         WHERE ts.session_id = %s
         GROUP BY ts.session_id, ts.player_id, ts.coach_id, ts.session_date,
                  ts.session_type, ts.location, ts.session_focus, 
-                 ts.duration_minutes, ts.notes, ts.source_id, ts.created_at,
+                 ts.duration_minutes, ts.coach_notes, ts.source_id, ts.created_at,
                  p.first_name, p.last_name, p.graduation_year, p.throws_hand,
                  c.first_name, c.last_name, c.email, c.phone, c.coach_id,
                  ds.source_id, ds.source_name
