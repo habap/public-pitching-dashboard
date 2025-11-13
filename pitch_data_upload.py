@@ -14,7 +14,7 @@ import requests
 
 # Page configuration
 st.set_page_config(
-    page_title="Data Upload 1829",
+    page_title="Pitching Data 0833",
     page_icon="⚾",
     layout="wide"
 )
@@ -64,6 +64,63 @@ def get_players(conn):
         ORDER BY last_name, first_name
     """)
     return cursor.fetchall()
+
+def get_locations(conn):
+    """Retrieve all locations"""
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT location_id, location_name
+        FROM locations 
+        ORDER BY location_name
+    """)
+    return cursor.fetchall()
+
+def create_location(conn, location_name):
+    """Create a new location and return its ID"""
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO locations (location_name)
+        VALUES (%s)
+    """, (location_name,))
+    conn.commit()
+    return cursor.lastrowid
+
+def ensure_locations_table(conn):
+    """Create locations table if it doesn't exist, or update existing table safely"""
+    cursor = conn.cursor()
+    
+    # Create table if it doesn't exist (won't affect existing table)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS locations (
+            location_id INT AUTO_INCREMENT PRIMARY KEY,
+            location_name VARCHAR(255) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    
+    # Try to add unique constraint if it doesn't exist
+    # This will silently fail if constraint already exists
+    try:
+        cursor.execute("""
+            ALTER TABLE locations 
+            ADD UNIQUE INDEX idx_location_name_unique (location_name)
+        """)
+        conn.commit()
+    except Exception as e:
+        # Constraint might already exist, which is fine
+        conn.rollback()
+        pass
+    
+    # Try to add regular index for performance if it doesn't exist
+    try:
+        cursor.execute("""
+            CREATE INDEX idx_location_name ON locations(location_name)
+        """)
+        conn.commit()
+    except Exception as e:
+        # Index might already exist, which is fine
+        conn.rollback()
+        pass
 
 def match_player_name(pitcher_name, players_list, external_id=None, data_source=None):
     """Match pitcher name from CSV to player in database
@@ -977,6 +1034,8 @@ def main():
         st.session_state.bulk_mode = False
     if 'upload_complete' not in st.session_state:
         st.session_state.upload_complete = False
+    if 'upload_summary' not in st.session_state:
+        st.session_state.upload_summary = None
     
     # Sidebar - Database connection status
     with st.sidebar:
@@ -989,6 +1048,8 @@ def main():
         conn = get_db_connection()
         if conn:
             st.success("✅ Connected to database")
+            # Ensure locations table exists
+            ensure_locations_table(conn)
             conn.close()
         else:
             st.error("❌ Database connection failed")
@@ -1199,11 +1260,37 @@ def main():
             if same_session_info:
                 col1, col2 = st.columns(2)
                 with col1:
-                    bulk_location = st.text_input(
-                        "Location (optional)", 
-                        placeholder="Main Field, Training Facility, etc.",
-                        key="bulk_location"
+                    # Get existing locations
+                    locations = get_locations(conn)
+                    location_options = ["-- No location --"] + [loc['location_name'] for loc in locations] + ["➕ Add new location..."]
+                    
+                    selected_location = st.selectbox(
+                        "Location",
+                        location_options,
+                        key="bulk_location_select"
                     )
+                    
+                    if selected_location == "➕ Add new location...":
+                        new_location = st.text_input(
+                            "Enter new location name:",
+                            key="bulk_new_location",
+                            placeholder="e.g., Main Field, Training Facility"
+                        )
+                        if new_location and new_location.strip():
+                            # Create the location in the database
+                            try:
+                                create_location(conn, new_location.strip())
+                                st.success(f"✅ Added location: {new_location.strip()}")
+                                bulk_location = new_location.strip()
+                            except Exception as e:
+                                if "Duplicate entry" in str(e):
+                                    st.info("This location already exists in the list")
+                                    bulk_location = new_location.strip()
+                                else:
+                                    st.error(f"Error adding location: {str(e)}")
+                    elif selected_location != "-- No location --":
+                        bulk_location = selected_location
+                    
                 with col2:
                     bulk_session_type = st.selectbox(
                         "Session Type",
@@ -1257,23 +1344,13 @@ def main():
                     )
                     
                     if success:
-                        st.success(message)
-                        
-                        # Show detailed breakdown
-                        if stats['players_processed']:
-                            st.subheader("📊 Upload Summary by Player")
-                            summary_data = []
-                            for pitcher_name, info in stats['players_processed'].items():
-                                summary_data.append({
-                                    'Player': pitcher_name,
-                                    'Pitches Uploaded': info['pitches'],
-                                    'Session ID': info['session_id'],
-                                    'Player ID': info['player_id']
-                                })
-                            summary_df = pd.DataFrame(summary_data)
-                            st.dataframe(summary_df, use_container_width=True)
-                        
-                        st.balloons()
+                        # Store summary in session state
+                        summary_data = {
+                            'message': message,
+                            'stats': stats,
+                            'mode': 'bulk'
+                        }
+                        st.session_state.upload_summary = summary_data
                         st.session_state.upload_complete = True
                         st.rerun()
                     else:
@@ -1321,7 +1398,38 @@ def main():
                     index=default_idx
                 )
             
-            location = st.text_input("Location (optional)", placeholder="Main Field, Training Facility, etc.")
+            # Location selector with dropdown
+            locations = get_locations(conn)
+            location_options = ["-- No location --"] + [loc['location_name'] for loc in locations] + ["➕ Add new location..."]
+            
+            selected_location = st.selectbox(
+                "Location",
+                location_options,
+                key="single_location_select"
+            )
+            
+            location = None
+            if selected_location == "➕ Add new location...":
+                new_location = st.text_input(
+                    "Enter new location name:",
+                    key="single_new_location",
+                    placeholder="e.g., Main Field, Training Facility"
+                )
+                if new_location and new_location.strip():
+                    # Create the location in the database
+                    try:
+                        create_location(conn, new_location.strip())
+                        st.success(f"✅ Added location: {new_location.strip()}")
+                        location = new_location.strip()
+                    except Exception as e:
+                        if "Duplicate entry" in str(e):
+                            st.info("This location already exists in the list")
+                            location = new_location.strip()
+                        else:
+                            st.error(f"Error adding location: {str(e)}")
+            elif selected_location != "-- No location --":
+                location = selected_location
+            
             session_focus = st.text_area("Session Focus (optional)", 
                                         placeholder="What was the focus of this session?")
             
@@ -1344,7 +1452,7 @@ def main():
                     session_id = create_training_session(
                         conn, player_id, session_date, session_type, 
                         source_options[data_source], len(df), 
-                        location, None, session_focus
+                        location if location else "", None, session_focus
                     )
                     
                     # Process CSV
@@ -1354,16 +1462,70 @@ def main():
                     )
                     
                     if success:
-                        st.success(message)
-                        st.balloons()
+                        # Store summary in session state
+                        summary_data = {
+                            'message': message,
+                            'stats': stats,
+                            'mode': 'single',
+                            'player_name': selected_player,
+                            'session_id': session_id
+                        }
+                        st.session_state.upload_summary = summary_data
                         st.session_state.upload_complete = True
                         st.rerun()
                     else:
                         st.error(f"Upload failed: {message}")
     
-    # Show "Upload Another File" button after completion
-    if st.session_state.upload_complete:
+    # Show upload summary and "Upload Another File" button after completion
+    if st.session_state.upload_complete and st.session_state.upload_summary:
         st.success("✅ Upload completed successfully!")
+        st.balloons()
+        
+        summary = st.session_state.upload_summary
+        
+        # Display summary based on mode
+        if summary['mode'] == 'bulk':
+            st.header("📊 Upload Summary")
+            st.info(summary['message'])
+            
+            if summary['stats'].get('players_processed'):
+                st.subheader("Results by Player")
+                summary_data = []
+                for pitcher_name, info in summary['stats']['players_processed'].items():
+                    summary_data.append({
+                        'Player': pitcher_name,
+                        'Pitches Uploaded': info['pitches'],
+                        'Session ID': info['session_id'],
+                        'Player ID': info['player_id']
+                    })
+                summary_df = pd.DataFrame(summary_data)
+                st.dataframe(summary_df, use_container_width=True)
+                
+                # Show totals
+                total_pitches = summary['stats'].get('inserted', 0)
+                total_players = len(summary['stats']['players_processed'])
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Total Pitches", total_pitches)
+                with col2:
+                    st.metric("Players Processed", total_players)
+                with col3:
+                    st.metric("Sessions Created", summary['stats'].get('sessions_created', 0))
+        
+        else:  # single player mode
+            st.header("📊 Upload Summary")
+            st.info(summary['message'])
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Player", summary['player_name'])
+                st.metric("Pitches Uploaded", summary['stats'].get('inserted', 0))
+            with col2:
+                st.metric("Session ID", summary['session_id'])
+                if summary['stats'].get('skipped', 0) > 0:
+                    st.metric("Pitches Skipped", summary['stats']['skipped'])
+        
+        st.markdown("---")
         if st.button("📁 Upload Another File", type="primary", use_container_width=True):
             # Clear all session state
             for key in list(st.session_state.keys()):
