@@ -88,7 +88,7 @@ def get_player_sessions(conn, player_id):
         WHERE ts.player_id = %s
         GROUP BY ts.session_id, ts.session_date, ts.session_type,
                  ts.location, ts.session_focus, ts.duration_minutes,
-                 ds.source_name, c.first_name, c.last_name, c.coach_id
+                 ds.source_id, ds.source_name, c.first_name, c.last_name, c.coach_id
         ORDER BY ts.session_date DESC, ts.session_id DESC
     """, (player_id,))
     return cursor.fetchall()
