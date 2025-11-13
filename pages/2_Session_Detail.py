@@ -63,11 +63,12 @@ def get_session_details(conn, session_id):
     cursor.execute("""
         SELECT ts.session_id, ts.player_id, ts.coach_id, ts.session_date,
                ts.session_type, ts.location, ts.session_focus, 
-               ts.duration_minutes, ts.coach_notes, ts.data_source_id, ts.created_at,
+               ts.duration_minutes, ts.notes, ts.source_id, ts.created_at,
                CONCAT(p.first_name, ' ', p.last_name) as player_name,
                p.graduation_year, p.throws_hand,
                CONCAT(c.first_name, ' ', c.last_name) as coach_name,
                c.email as coach_email, c.phone as coach_phone,
+               ds.source_name,
                COUNT(pd.pitch_id) as total_pitches,
                AVG(pd.release_speed) as avg_velocity,
                MAX(pd.release_speed) as max_velocity,
@@ -77,15 +78,15 @@ def get_session_details(conn, session_id):
         FROM training_sessions ts
         JOIN players p ON ts.player_id = p.player_id
         LEFT JOIN coaches c ON ts.coach_id = c.coach_id
-        LEFT JOIN data_sources ds ON ts.data_source_id = ds.source_id
+        LEFT JOIN data_sources ds ON ts.source_id = ds.source_id
         LEFT JOIN pitch_data pd ON ts.session_id = pd.session_id
         WHERE ts.session_id = %s
         GROUP BY ts.session_id, ts.player_id, ts.coach_id, ts.session_date,
                  ts.session_type, ts.location, ts.session_focus, 
-                 ts.duration_minutes, ts.coach_notes, ts.data_source_id, ts.created_at,
+                 ts.duration_minutes, ts.notes, ts.source_id, ts.created_at,
                  p.first_name, p.last_name, p.graduation_year, p.throws_hand,
                  c.first_name, c.last_name, c.email, c.phone, c.coach_id,
-                 ds.source_name
+                 ds.source_id, ds.source_name
     """, (session_id,))
     return cursor.fetchone()
 
