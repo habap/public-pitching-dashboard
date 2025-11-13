@@ -51,7 +51,7 @@ def get_pitch_details(conn, pitch_id):
         JOIN training_sessions ts ON pd.session_id = ts.session_id
         JOIN players p ON ts.player_id = p.player_id
         LEFT JOIN coaches c ON ts.coach_id = c.coach_id
-        LEFT JOIN data_sources ds ON ts.source_id = ds.source_id
+        LEFT JOIN data_sources ds ON ts.data_source_id = ds.source_id
         WHERE pd.pitch_id = %s
     """, (pitch_id,))
     return cursor.fetchone()
@@ -362,22 +362,22 @@ def main():
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        if pitch['vertical_approach_angle']:
-            st.metric("Vertical Approach Angle", f"{pitch['vertical_approach_angle']:.1f}°",
+        if pitch['vert_approach_angle']:
+            st.metric("Vertical Approach Angle", f"{pitch['vert_approach_angle']:.1f}°",
                      help="Angle of ball's descent as it crosses plate")
         else:
             st.metric("Vertical Approach Angle", "N/A")
     
     with col2:
-        if pitch['horizontal_approach_angle']:
-            st.metric("Horizontal Approach Angle", f"{pitch['horizontal_approach_angle']:.1f}°",
+        if pitch['horz_approach_angle']:
+            st.metric("Horizontal Approach Angle", f"{pitch['horz_approach_angle']:.1f}°",
                      help="Horizontal angle as pitch crosses plate")
         else:
             st.metric("Horizontal Approach Angle", "N/A")
     
     with col3:
-        if pitch['plate_time']:
-            st.metric("Time to Plate", f"{pitch['plate_time']:.3f} sec",
+        if pitch['plate_crossing_time']:
+            st.metric("Time to Plate", f"{pitch['plate_crossing_time']:.3f} sec",
                      help="Time from release to home plate")
         else:
             st.metric("Time to Plate", "N/A")
@@ -385,13 +385,13 @@ def main():
     st.divider()
     
     # Strike Zone Section (if available)
-    if pitch['plate_x'] is not None or pitch['plate_z'] is not None:
+    if pitch['plate_location_x'] is not None or pitch['plate_location_z'] is not None:
         st.subheader("🎯 Strike Zone Location")
         
         col1, col2 = st.columns([2, 1])
         
         with col1:
-            if pitch['plate_x'] is not None and pitch['plate_z'] is not None:
+            if pitch['plate_location_x'] is not None and pitch['plate_location_z'] is not None:
                 # Create strike zone plot
                 fig = go.Figure()
                 
@@ -412,8 +412,8 @@ def main():
                 
                 # Add the pitch location
                 fig.add_trace(go.Scatter(
-                    x=[pitch['plate_x']],
-                    y=[pitch['plate_z']],
+                    x=[pitch['plate_location_x']],
+                    y=[pitch['plate_location_z']],
                     mode='markers',
                     marker=dict(size=15, color='red', symbol='circle'),
                     name='Pitch Location',
@@ -434,9 +434,9 @@ def main():
                 st.plotly_chart(fig, use_container_width=True)
         
         with col2:
-            st.metric("Plate X", f"{pitch['plate_x']:.2f}'" if pitch['plate_x'] else "N/A",
+            st.metric("Plate X", f"{pitch['plate_location_x']:.2f}'" if pitch['plate_location_x'] else "N/A",
                      help="Horizontal position at plate (0 = center)")
-            st.metric("Plate Z", f"{pitch['plate_z']:.2f}'" if pitch['plate_z'] else "N/A",
+            st.metric("Plate Z", f"{pitch['plate_location_z']:.2f}'" if pitch['plate_location_z'] else "N/A",
                      help="Vertical position at plate")
     
     st.divider()
