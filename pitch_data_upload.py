@@ -14,7 +14,7 @@ import requests
 
 # Page configuration
 st.set_page_config(
-    page_title="Pitching Data 0833",
+    page_title="Pitching Data Upload",
     page_icon="⚾",
     layout="wide"
 )
@@ -1212,7 +1212,7 @@ def main():
                 match_data.append(match_entry)
             
             match_df = pd.DataFrame(match_data)
-            st.dataframe(match_df, use_container_width=True)
+            st.dataframe(match_df, width=True)
             
             if has_duplicates:
                 st.warning("⚠️ **Duplicate name warning:** Some CSV names matched multiple players in your database. The system will use the best match based on name similarity and external IDs. Review the upload summary carefully.")
@@ -1324,9 +1324,9 @@ def main():
             
             col1, col2 = st.columns([3, 1])
             with col1:
-                process_button = st.button("🚀 Process Bulk Upload", type="primary", use_container_width=True)
+                process_button = st.button("🚀 Process Bulk Upload", type="primary", width=True)
             with col2:
-                cancel_button = st.button("❌ Cancel", use_container_width=True)
+                cancel_button = st.button("❌ Cancel", width=True)
             
             if cancel_button:
                 st.session_state.upload_complete = True
@@ -1438,9 +1438,9 @@ def main():
             
             col1, col2 = st.columns([3, 1])
             with col1:
-                process_button = st.button("🚀 Process and Upload", type="primary", use_container_width=True)
+                process_button = st.button("🚀 Process and Upload", type="primary", width=True)
             with col2:
-                cancel_button = st.button("❌ Cancel", use_container_width=True)
+                cancel_button = st.button("❌ Cancel", width=True)
             
             if cancel_button:
                 st.session_state.upload_complete = True
@@ -1499,7 +1499,7 @@ def main():
                         'Player ID': info['player_id']
                     })
                 summary_df = pd.DataFrame(summary_data)
-                st.dataframe(summary_df, use_container_width=True)
+                st.dataframe(summary_df, width=True)
                 
                 # Show totals
                 total_pitches = summary['stats'].get('inserted', 0)
@@ -1526,7 +1526,7 @@ def main():
                     st.metric("Pitches Skipped", summary['stats']['skipped'])
         
         st.markdown("---")
-        if st.button("📁 Upload Another File", type="primary", use_container_width=True):
+        if st.button("📁 Upload Another File", type="primary", width=True):
             # Clear all session state
             for key in list(st.session_state.keys()):
                 del st.session_state[key]
