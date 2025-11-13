@@ -2,3 +2,5 @@ streamlit>=1.28.0
 pandas>=2.0.0
 mysql-connector-python>=8.0.33
 requests>=2.31.0
+plotly>=5.17.0
+Pillow>=10.0.0
