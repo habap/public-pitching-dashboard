@@ -88,6 +88,53 @@ def get_all_pitches_dropdown(conn):
     
     return results
 
+def get_all_players_with_pitches(conn):
+    """Get all players who have pitch data"""
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT DISTINCT p.player_id,
+               CONCAT(p.first_name, ' ', p.last_name) as player_name,
+               p.graduation_year
+        FROM players p
+        JOIN training_sessions ts ON p.player_id = ts.player_id
+        JOIN pitch_data pd ON ts.session_id = pd.session_id
+        ORDER BY p.last_name, p.first_name
+    """)
+    return cursor.fetchall()
+
+def get_sessions_with_pitches_by_player(conn, player_id):
+    """Get all sessions with pitch data for a specific player"""
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT DISTINCT ts.session_id, ts.session_date, ts.session_type,
+               COUNT(pd.pitch_id) as pitch_count
+        FROM training_sessions ts
+        JOIN pitch_data pd ON ts.session_id = pd.session_id
+        WHERE ts.player_id = %s
+        GROUP BY ts.session_id, ts.session_date, ts.session_type
+        ORDER BY ts.session_date DESC
+    """, (player_id,))
+    return cursor.fetchall()
+
+def get_pitches_by_session(conn, session_id):
+    """Get all pitches for a specific session"""
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT pd.pitch_id, pd.pitch_number, pd.release_speed
+        FROM pitch_data pd
+        WHERE pd.session_id = %s
+        ORDER BY pd.pitch_number
+    """, (session_id,))
+    results = cursor.fetchall()
+    
+    # Convert decimals to float
+    for row in results:
+        for key, value in row.items():
+            if value is not None and type(value).__name__ == 'Decimal':
+                row[key] = float(value)
+    
+    return results
+
 def main():
     st.title("⚾ Pitch Detail")
     
@@ -96,40 +143,110 @@ def main():
         st.error("Could not connect to database")
         return
     
-    # Check if a pitch was selected from another page
-    selected_pitch_id = st.session_state.get('selected_pitch_id')
-    selected_session_id = st.session_state.get('selected_session_id')
-    session_player_name = st.session_state.get('session_player_name')
-    session_player_id = st.session_state.get('session_player_id')
+    # Check if selections were made from another page
+    preselected_pitch_id = st.session_state.get('selected_pitch_id')
+    preselected_session_id = st.session_state.get('selected_session_id')
+    preselected_player_id = st.session_state.get('session_player_id')
     
-    # Pitch selection
-    pitches = get_all_pitches_dropdown(conn)
+    # Get all players with pitch data
+    players = get_all_players_with_pitches(conn)
     
-    if not pitches:
-        st.warning("No pitch data found in database")
+    if not players:
+        st.warning("No players with pitch data found in database")
         conn.close()
         return
     
-    # Create pitch options for dropdown
-    pitch_options = {
-        f"{p['session_date'].strftime('%m/%d/%Y')} - {p['player_name']} - Pitch #{p['pitch_number']} ({p['release_speed']:.1f} mph)" if p['release_speed'] else 
-        f"{p['session_date'].strftime('%m/%d/%Y')} - {p['player_name']} - Pitch #{p['pitch_number']}": p['pitch_id']
-        for p in pitches
+    # Step 1: Player selection
+    player_options = {
+        f"{p['player_name']} ({p['graduation_year']})": p['player_id'] 
+        for p in players
     }
     
-    # If there's a pre-selected pitch, use it as default
-    if selected_pitch_id and selected_pitch_id in pitch_options.values():
-        default_index = list(pitch_options.values()).index(selected_pitch_id)
+    # If there's a preselected player, use it as default
+    if preselected_player_id and preselected_player_id in player_options.values():
+        default_player_index = list(player_options.values()).index(preselected_player_id)
     else:
-        default_index = 0
+        default_player_index = 0
+    
+    selected_player = st.selectbox(
+        "👤 Select Player",
+        list(player_options.keys()),
+        index=default_player_index,
+        key="pitch_detail_player_selector"
+    )
+    
+    player_id = player_options[selected_player]
+    
+    # Step 2: Session selection (filtered by selected player)
+    sessions = get_sessions_with_pitches_by_player(conn, player_id)
+    
+    if not sessions:
+        st.warning(f"No sessions with pitch data found for {selected_player}")
+        conn.close()
+        return
+    
+    # Create session options
+    session_options = {
+        f"{s['session_date'].strftime('%m/%d/%Y')} - {s['session_type']} ({s['pitch_count']} pitches)": s['session_id']
+        for s in sessions
+    }
+    
+    # If there's a preselected session, use it as default
+    if preselected_session_id and preselected_session_id in session_options.values():
+        default_session_index = list(session_options.values()).index(preselected_session_id)
+    else:
+        default_session_index = 0
+    
+    selected_session = st.selectbox(
+        "📅 Select Session",
+        list(session_options.keys()),
+        index=default_session_index,
+        key="pitch_detail_session_selector"
+    )
+    
+    session_id = session_options[selected_session]
+    
+    # Step 3: Pitch selection (filtered by selected session)
+    pitches = get_pitches_by_session(conn, session_id)
+    
+    if not pitches:
+        st.warning("No pitches found for this session")
+        conn.close()
+        return
+    
+    # Create pitch options
+    pitch_options = {}
+    for p in pitches:
+        if p.get('release_speed'):
+            label = f"Pitch #{p['pitch_number']} - {p['release_speed']:.1f} mph"
+        else:
+            label = f"Pitch #{p['pitch_number']}"
+        pitch_options[label] = p['pitch_id']
+    
+    # If there's a preselected pitch, use it as default
+    if preselected_pitch_id and preselected_pitch_id in pitch_options.values():
+        default_pitch_index = list(pitch_options.values()).index(preselected_pitch_id)
+    else:
+        default_pitch_index = 0
     
     selected_pitch = st.selectbox(
-        "Select a pitch",
+        "⚾ Select Pitch",
         list(pitch_options.keys()),
-        index=default_index
+        index=default_pitch_index,
+        key="pitch_detail_pitch_selector"
     )
     
     pitch_id = pitch_options[selected_pitch]
+    
+    # Clear preselected values from state after using them
+    if 'selected_pitch_id' in st.session_state:
+        del st.session_state['selected_pitch_id']
+    if 'selected_session_id' in st.session_state:
+        del st.session_state['selected_session_id']
+    if 'session_player_id' in st.session_state:
+        del st.session_state['session_player_id']
+    if 'session_player_name' in st.session_state:
+        del st.session_state['session_player_name']
     
     # Get pitch details
     pitch = get_pitch_details(conn, pitch_id)
@@ -151,6 +268,7 @@ def main():
     with col2:
         if st.button(f"← Back to Session", key="back_to_session"):
             st.session_state['selected_session_id'] = pitch['session_id']
+            st.session_state['selected_player_id'] = pitch['player_id']
             st.switch_page("pages/2_Session_Detail.py")
     
     # Clear session state after displaying navigation
