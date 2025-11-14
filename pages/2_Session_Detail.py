@@ -57,6 +57,37 @@ def get_all_sessions(conn):
     """)
     return cursor.fetchall()
 
+def get_all_players_with_sessions(conn):
+    """Get all players who have sessions"""
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT DISTINCT p.player_id,
+               CONCAT(p.first_name, ' ', p.last_name) as player_name,
+               p.graduation_year
+        FROM players p
+        JOIN training_sessions ts ON p.player_id = ts.player_id
+        ORDER BY p.last_name, p.first_name
+    """)
+    return cursor.fetchall()
+
+def get_sessions_by_player(conn, player_id):
+    """Get all sessions for a specific player"""
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT ts.session_id, ts.session_date, ts.session_type,
+               ts.location,
+               CONCAT(c.first_name, ' ', c.last_name) as coach_name,
+               COUNT(pd.pitch_id) as pitch_count
+        FROM training_sessions ts
+        LEFT JOIN coaches c ON ts.coach_id = c.coach_id
+        LEFT JOIN pitch_data pd ON ts.session_id = pd.session_id
+        WHERE ts.player_id = %s
+        GROUP BY ts.session_id, ts.session_date, ts.session_type,
+                 ts.location, c.first_name, c.last_name
+        ORDER BY ts.session_date DESC, ts.session_id DESC
+    """, (player_id,))
+    return cursor.fetchall()
+
 def get_session_details(conn, session_id):
     """Get detailed session information"""
     cursor = conn.cursor(dictionary=True)
@@ -149,40 +180,72 @@ def main():
         return
     
     # Check if a session was selected from another page
-    selected_session_id = st.session_state.get('selected_session_id')
+    preselected_session_id = st.session_state.get('selected_session_id')
+    preselected_player_id = st.session_state.get('selected_player_id')
     
-    # Session selection
-    sessions = get_all_sessions(conn)
+    # Get all players with sessions
+    players = get_all_players_with_sessions(conn)
+    
+    if not players:
+        st.warning("No players with training sessions found in database")
+        conn.close()
+        return
+    
+    # Step 1: Player selection
+    player_options = {
+        f"{p['player_name']} ({p['graduation_year']})": p['player_id'] 
+        for p in players
+    }
+    
+    # If there's a preselected player, use it as default
+    if preselected_player_id and preselected_player_id in player_options.values():
+        default_player_index = list(player_options.values()).index(preselected_player_id)
+    else:
+        default_player_index = 0
+    
+    selected_player = st.selectbox(
+        "👤 Select Player",
+        list(player_options.keys()),
+        index=default_player_index,
+        key="session_detail_player_selector"
+    )
+    
+    player_id = player_options[selected_player]
+    
+    # Step 2: Session selection (filtered by selected player)
+    sessions = get_sessions_by_player(conn, player_id)
     
     if not sessions:
-        st.warning("No training sessions found in database")
+        st.warning(f"No training sessions found for {selected_player}")
         conn.close()
         return
     
     # Create session options for dropdown
     session_options = {
-        f"{s['session_date'].strftime('%m/%d/%Y')} - {s['player_name']} - {s['session_type']} ({s['pitch_count']} pitches)": s['session_id']
+        f"{s['session_date'].strftime('%m/%d/%Y')} - {s['session_type']} ({s['pitch_count']} pitches)": s['session_id']
         for s in sessions
     }
     
-    # If there's a pre-selected session, use it as default
-    if selected_session_id and selected_session_id in session_options.values():
-        # Find the index of the selected session
-        default_index = list(session_options.values()).index(selected_session_id)
+    # If there's a preselected session, use it as default
+    if preselected_session_id and preselected_session_id in session_options.values():
+        default_session_index = list(session_options.values()).index(preselected_session_id)
     else:
-        default_index = 0
+        default_session_index = 0
     
     selected_session = st.selectbox(
-        "Select a training session",
+        "📅 Select Session",
         list(session_options.keys()),
-        index=default_index
+        index=default_session_index,
+        key="session_detail_session_selector"
     )
     
     session_id = session_options[selected_session]
     
-    # Clear the selected session from state after using it
+    # Clear the preselected values from state after using them
     if 'selected_session_id' in st.session_state:
         del st.session_state['selected_session_id']
+    if 'selected_player_id' in st.session_state:
+        del st.session_state['selected_player_id']
     
     # Get session details
     session = get_session_details(conn, session_id)
