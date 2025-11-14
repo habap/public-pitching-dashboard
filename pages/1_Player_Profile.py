@@ -106,7 +106,15 @@ def get_player_pitch_data(conn, player_id, limit=100):
         ORDER BY ts.session_date DESC, pd.pitch_number
         LIMIT %s
     """, (player_id, limit))
-    return cursor.fetchall()
+    results = cursor.fetchall()
+    
+    # Convert decimal.Decimal to float for pandas compatibility
+    for row in results:
+        for key, value in row.items():
+            if value is not None and type(value).__name__ == 'Decimal':
+                row[key] = float(value)
+    
+    return results
 
 def get_player_coaches(conn, player_id):
     """Get all coaches who have worked with this player"""
@@ -142,6 +150,37 @@ def get_player_locations(conn, player_id):
         ORDER BY session_count DESC
     """, (player_id,))
     return cursor.fetchall()
+
+def get_pitch_type_summary(conn, session_id):
+    """Get pitch type breakdown for a session with movement stats"""
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT pitch_type,
+               COUNT(*) as count,
+               AVG(release_speed) as avg_velocity,
+               MIN(release_speed) as min_velocity,
+               MAX(release_speed) as max_velocity,
+               AVG(horizontal_break) as avg_h_break,
+               MIN(horizontal_break) as min_h_break,
+               MAX(horizontal_break) as max_h_break,
+               AVG(induced_vertical_break) as avg_v_break,
+               MIN(induced_vertical_break) as min_v_break,
+               MAX(induced_vertical_break) as max_v_break,
+               AVG(spin_rate) as avg_spin
+        FROM pitch_data
+        WHERE session_id = %s AND pitch_type IS NOT NULL
+        GROUP BY pitch_type
+        ORDER BY count DESC
+    """, (session_id,))
+    results = cursor.fetchall()
+    
+    # Convert decimals to float
+    for row in results:
+        for key, value in row.items():
+            if value is not None and type(value).__name__ == 'Decimal':
+                row[key] = float(value)
+    
+    return results
 
 def main():
     st.title("👤 Player Profile")
@@ -257,6 +296,13 @@ def main():
                         if session['avg_spin']:
                             metrics_text.append(f"Spin: **{session['avg_spin']:.0f}** rpm")
                         st.write(" | ".join(metrics_text) if metrics_text else "No pitch data")
+                        
+                        # Add pitch type breakdown if available
+                        if session['pitch_count'] and session['pitch_count'] > 0:
+                            pitch_types = get_pitch_type_summary(conn, session['session_id'])
+                            if pitch_types:
+                                type_summary = ", ".join([f"{pt['pitch_type']}: {pt['count']}" for pt in pitch_types])
+                                st.caption(f"📊 {type_summary}")
                     
                     with col5:
                         if st.button("View", key=f"session_{session['session_id']}", use_container_width=True):
