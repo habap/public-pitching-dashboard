@@ -99,7 +99,46 @@ def get_session_pitches(conn, session_id):
         WHERE pd.session_id = %s
         ORDER BY pd.pitch_number
     """, (session_id,))
-    return cursor.fetchall()
+    results = cursor.fetchall()
+    
+    # Convert decimal.Decimal to float for pandas compatibility
+    for row in results:
+        for key, value in row.items():
+            if value is not None and type(value).__name__ == 'Decimal':
+                row[key] = float(value)
+    
+    return results
+
+def get_pitch_type_summary(conn, session_id):
+    """Get pitch type breakdown for a session with movement stats"""
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT pitch_type,
+               COUNT(*) as count,
+               AVG(release_speed) as avg_velocity,
+               MIN(release_speed) as min_velocity,
+               MAX(release_speed) as max_velocity,
+               AVG(horizontal_break) as avg_h_break,
+               MIN(horizontal_break) as min_h_break,
+               MAX(horizontal_break) as max_h_break,
+               AVG(induced_vertical_break) as avg_v_break,
+               MIN(induced_vertical_break) as min_v_break,
+               MAX(induced_vertical_break) as max_v_break,
+               AVG(spin_rate) as avg_spin
+        FROM pitch_data
+        WHERE session_id = %s AND pitch_type IS NOT NULL
+        GROUP BY pitch_type
+        ORDER BY count DESC
+    """, (session_id,))
+    results = cursor.fetchall()
+    
+    # Convert decimals to float
+    for row in results:
+        for key, value in row.items():
+            if value is not None and type(value).__name__ == 'Decimal':
+                row[key] = float(value)
+    
+    return results
 
 def main():
     st.title("📋 Session Detail")
@@ -303,6 +342,29 @@ def main():
         
         if pitches and len(pitches) > 0:
             df = pd.DataFrame(pitches)
+            
+            # Pitch Type Breakdown
+            pitch_type_summary = get_pitch_type_summary(conn, session_id)
+            if pitch_type_summary:
+                st.subheader("📊 Pitch Type Breakdown")
+                
+                # Create summary table
+                summary_data = []
+                for pt in pitch_type_summary:
+                    summary_data.append({
+                        'Pitch Type': pt['pitch_type'],
+                        'Count': pt['count'],
+                        'Velocity': f"{pt['min_velocity']:.1f} / {pt['avg_velocity']:.1f} / {pt['max_velocity']:.1f}" if pt['avg_velocity'] else 'N/A',
+                        'H Break (in)': f"{pt['min_h_break']:.1f} / {pt['avg_h_break']:.1f} / {pt['max_h_break']:.1f}" if pt['avg_h_break'] else 'N/A',
+                        'V Break (in)': f"{pt['min_v_break']:.1f} / {pt['avg_v_break']:.1f} / {pt['max_v_break']:.1f}" if pt['avg_v_break'] else 'N/A',
+                        'Avg Spin': f"{pt['avg_spin']:.0f}" if pt['avg_spin'] else 'N/A'
+                    })
+                
+                summary_df = pd.DataFrame(summary_data)
+                st.dataframe(summary_df, use_container_width=True, hide_index=True)
+                st.caption("📌 Format: Min / Avg / Max")
+                
+                st.markdown("---")
             
             # Velocity stats
             if 'release_speed' in df.columns and df['release_speed'].notna().any():

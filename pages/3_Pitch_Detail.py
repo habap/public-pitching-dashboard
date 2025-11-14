@@ -54,7 +54,15 @@ def get_pitch_details(conn, pitch_id):
         LEFT JOIN data_sources ds ON ts.data_source_id = ds.source_id
         WHERE pd.pitch_id = %s
     """, (pitch_id,))
-    return cursor.fetchone()
+    result = cursor.fetchone()
+    
+    # Convert decimal.Decimal to float for compatibility
+    if result:
+        for key, value in result.items():
+            if value is not None and type(value).__name__ == 'Decimal':
+                result[key] = float(value)
+    
+    return result
 
 def get_all_pitches_dropdown(conn):
     """Get all pitches for dropdown selection"""
@@ -70,7 +78,15 @@ def get_all_pitches_dropdown(conn):
         ORDER BY ts.session_date DESC, pd.pitch_number
         LIMIT 500
     """)
-    return cursor.fetchall()
+    results = cursor.fetchall()
+    
+    # Convert decimals to float
+    for row in results:
+        for key, value in row.items():
+            if value is not None and type(value).__name__ == 'Decimal':
+                row[key] = float(value)
+    
+    return results
 
 def main():
     st.title("⚾ Pitch Detail")
