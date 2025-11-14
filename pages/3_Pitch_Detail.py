@@ -64,6 +64,101 @@ def get_pitch_details(conn, pitch_id):
     
     return result
 
+def get_session_pitches(conn, session_id):
+    """Get all pitches in a session for numbering"""
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT pitch_id, pitch_timestamp
+        FROM pitch_data
+        WHERE session_id = %s
+        ORDER BY pitch_timestamp
+    """, (session_id,))
+    return cursor.fetchall()
+
+def get_pitcher_pitches(conn, player_id, pitch_timestamp):
+    """Get all pitches for a pitcher up to this pitch for numbering"""
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT pd.pitch_id, pd.pitch_timestamp
+        FROM pitch_data pd
+        JOIN training_sessions ts ON pd.session_id = ts.session_id
+        WHERE ts.player_id = %s AND pd.pitch_timestamp <= %s
+        ORDER BY pd.pitch_timestamp
+    """, (player_id, pitch_timestamp))
+    return cursor.fetchall()
+
+def create_combined_polar_chart(pitch):
+    """Create combined arm slot and spin direction polar chart"""
+    fig = go.Figure()
+    
+    # Create circle background
+    theta = list(range(0, 361, 5))
+    r = [1] * len(theta)
+    
+    fig.add_trace(go.Scatterpolar(
+        r=r,
+        theta=theta,
+        mode='lines',
+        line=dict(color='lightgray', width=2),
+        showlegend=False,
+        hoverinfo='skip'
+    ))
+    
+    # Add arm slot line (if available)
+    if pitch.get('arm_slot') is not None:
+        arm_angle = float(pitch['arm_slot'])
+        fig.add_trace(go.Scatterpolar(
+            r=[0, 1],
+            theta=[arm_angle, arm_angle],
+            mode='lines+markers',
+            line=dict(color='blue', width=4),
+            marker=dict(size=[0, 12], color='blue'),
+            name='Arm Slot',
+            showlegend=True
+        ))
+    
+    # Add spin direction line (if available)
+    if pitch.get('spin_axis') is not None:
+        spin_angle = float(pitch['spin_axis'])
+        fig.add_trace(go.Scatterpolar(
+            r=[0, 1],
+            theta=[spin_angle, spin_angle],
+            mode='lines+markers',
+            line=dict(color='red', width=4),
+            marker=dict(size=[0, 12], color='red'),
+            name='Spin Direction',
+            showlegend=True
+        ))
+    
+    # Determine arm side and glove side labels based on throwing hand
+    if pitch.get('throws_hand'):
+        if pitch['throws_hand'] == 'R':
+            arm_side = "9:00 (Arm Side)"
+            glove_side = "3:00 (Glove Side)"
+        else:
+            arm_side = "3:00 (Arm Side)"
+            glove_side = "9:00 (Glove Side)"
+    else:
+        arm_side = "9:00"
+        glove_side = "3:00"
+    
+    fig.update_layout(
+        polar=dict(
+            radialaxis=dict(visible=False, range=[0, 1]),
+            angularaxis=dict(
+                direction='clockwise',
+                rotation=90,
+                ticktext=['12:00 (OTT)', glove_side, '6:00 (Sub)', arm_side],
+                tickvals=[0, 90, 180, 270]
+            )
+        ),
+        showlegend=True,
+        height=500,
+        title="Release Mechanics (Pitcher's View)"
+    )
+    
+    return fig
+    
 def get_all_pitches_dropdown(conn):
     """Get all pitches for dropdown selection"""
     cursor = conn.cursor(dictionary=True)
@@ -284,12 +379,23 @@ def main():
     
     st.markdown("---")
     
+    # Get pitch numbers (context-aware)
+    session_pitches = get_session_pitches(conn, pitch['session_id'])
+    session_pitch_num = next((i+1 for i, p in enumerate(session_pitches) if p['pitch_id'] == pitch_id), None)
+    
+    pitcher_pitches = get_pitcher_pitches(conn, pitch['player_id'], pitch['pitch_timestamp'])
+    pitcher_pitch_num = next((i+1 for i, p in enumerate(pitcher_pitches) if p['pitch_id'] == pitch_id), None)
+    
+    # Pitch Header with context numbering
+    st.markdown(f"### {pitch['player_name']} - {pitch.get('pitch_type', 'Unknown')} Pitch")
+    st.markdown(f"**Session:** {pitch['session_date'].strftime('%m/%d/%Y')} | **Pitch #{session_pitch_num}** in session | **Pitch #{pitcher_pitch_num}** for pitcher")
+    st.markdown("---")
+
     # Pitch Header
     col1, col2, col3 = st.columns(3)
     
     with col1:
         st.subheader("Pitch Information")
-        st.metric("Pitch Number", f"#{pitch['pitch_number']}")
         if pitch.get('pitch_type'):
             st.metric("Pitch Type", pitch['pitch_type'])
         st.write(f"**Session Date:** {pitch['session_date'].strftime('%m/%d/%Y')}")
@@ -363,128 +469,37 @@ def main():
         else:
             st.metric("Spin Efficiency", "N/A")
     
-    # Add spin axis and arm slot visualization if available
+# Combined polar chart for arm slot and spin direction
     if pitch['spin_axis'] or pitch.get('arm_slot'):
-        col_viz1, col_viz2 = st.columns(2)
+        st.subheader("Release Mechanics")
+        fig = create_combined_polar_chart(pitch)
+        st.plotly_chart(fig, use_container_width=True)
         
-        with col_viz1:
-            if pitch['spin_axis']:
-                st.subheader("Spin Axis (Pitcher's View)")
-                fig = go.Figure()
-                
-                # Create a circle to represent the ball from pitcher's perspective
-                theta = [i for i in range(0, 361, 5)]
-                r = [1] * len(theta)
-                
-                fig.add_trace(go.Scatterpolar(
-                    r=r,
-                    theta=theta,
-                    mode='lines',
-                    line=dict(color='lightgray', width=2),
-                    showlegend=False
-                ))
-                
-                # Convert spin axis to pitcher's view (flip horizontally)
-                # In pitcher's view, 0° is up, 90° is to their right (3B side for RHP)
-                spin_angle = pitch['spin_axis']
-                
-                fig.add_trace(go.Scatterpolar(
-                    r=[0, 1],
-                    theta=[spin_angle, spin_angle],
-                    mode='lines+markers',
-                    line=dict(color='red', width=4),
-                    marker=dict(size=[0, 20], symbol='arrow', angleref='previous'),
-                    name='Spin Axis',
-                    showlegend=True
-                ))
-                
-                fig.update_layout(
-                    polar=dict(
-                        radialaxis=dict(visible=False, range=[0, 1]),
-                        angularaxis=dict(
-                            direction='clockwise', 
-                            rotation=90,
-                            ticktext=['12:00', '3:00', '6:00', '9:00'],
-                            tickvals=[0, 90, 180, 270]
-                        )
-                    ),
-                    showlegend=True,
-                    height=400,
-                    title=f"Spin: {spin_angle:.0f}° (Pitcher's Perspective)"
-                )
-                
-                st.plotly_chart(fig, use_container_width=True)
-                
-                # Add explanation
-                if pitch['throws_hand']:
-                    if pitch['throws_hand'] == 'R':
-                        st.caption("🔵 For RHP: 12:00 = pure backspin, 3:00 = arm side (3B), 9:00 = glove side (1B)")
-                    else:
-                        st.caption("🔵 For LHP: 12:00 = pure backspin, 3:00 = glove side (3B), 9:00 = arm side (1B)")
+        # Add descriptive text
+        descriptions = []
+        if pitch.get('arm_slot') is not None:
+            arm_angle = float(pitch['arm_slot'])
+            if 345 <= arm_angle or arm_angle <= 15:
+                slot_type = "Over-the-top"
+            elif 15 < arm_angle <= 60:
+                slot_type = "High 3/4"
+            elif 60 < arm_angle <= 120:
+                slot_type = "3/4"
+            elif 120 < arm_angle <= 150:
+                slot_type = "Low 3/4"
+            elif 150 < arm_angle <= 200:
+                slot_type = "Sidearm"
+            else:
+                slot_type = "Submarine"
+            descriptions.append(f"📐 **Arm Slot:** {slot_type} ({arm_angle:.0f}°)")
         
-        with col_viz2:
-            if pitch.get('arm_slot'):
-                st.subheader("Arm Slot")
-                fig = go.Figure()
-                
-                # Create a circle to represent release point view
-                theta = [i for i in range(0, 361, 5)]
-                r = [1] * len(theta)
-                
-                fig.add_trace(go.Scatterpolar(
-                    r=r,
-                    theta=theta,
-                    mode='lines',
-                    line=dict(color='lightgray', width=2),
-                    showlegend=False
-                ))
-                
-                # Arm slot angle
-                arm_angle = pitch['arm_slot']
-                
-                fig.add_trace(go.Scatterpolar(
-                    r=[0, 1],
-                    theta=[arm_angle, arm_angle],
-                    mode='lines+markers',
-                    line=dict(color='blue', width=4),
-                    marker=dict(size=[0, 20], symbol='arrow', angleref='previous'),
-                    name='Arm Slot',
-                    showlegend=True
-                ))
-                
-                fig.update_layout(
-                    polar=dict(
-                        radialaxis=dict(visible=False, range=[0, 1]),
-                        angularaxis=dict(
-                            direction='clockwise', 
-                            rotation=90,
-                            ticktext=['12:00 (OTT)', '3:00', '6:00 (Submarine)', '9:00'],
-                            tickvals=[0, 90, 180, 270]
-                        )
-                    ),
-                    showlegend=True,
-                    height=400,
-                    title=f"Arm Slot: {arm_angle:.0f}°"
-                )
-                
-                st.plotly_chart(fig, use_container_width=True)
-                
-                # Add description based on angle
-                if 345 <= arm_angle or arm_angle <= 15:
-                    slot_type = "Over-the-top"
-                elif 15 < arm_angle <= 60:
-                    slot_type = "High 3/4"
-                elif 60 < arm_angle <= 120:
-                    slot_type = "3/4"
-                elif 120 < arm_angle <= 150:
-                    slot_type = "Low 3/4"
-                elif 150 < arm_angle <= 200:
-                    slot_type = "Sidearm"
-                else:
-                    slot_type = "Submarine"
-                
-                st.caption(f"📐 {slot_type} delivery")
-    
+        if pitch.get('spin_axis') is not None:
+            spin_angle = float(pitch['spin_axis'])
+            descriptions.append(f"🔴 **Spin Direction:** {spin_angle:.0f}°")
+        
+        for desc in descriptions:
+            st.markdown(desc)
+            
     st.divider()
     
     # Movement Section
