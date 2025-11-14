@@ -210,7 +210,7 @@ def main():
             st.metric("Release Speed", "N/A")
     
     with col2:
-        if pitch['perceived_velocity']:
+        if pitch.get('perceived_velocity'):
             st.metric("Perceived Velocity", f"{pitch['perceived_velocity']:.1f} mph",
                      help="Effective velocity from the batter's perspective")
         else:
