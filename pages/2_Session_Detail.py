@@ -431,23 +431,55 @@ def main():
             
             # Velocity stats
             if 'release_speed' in df.columns and df['release_speed'].notna().any():
-                st.subheader("Velocity Analysis")
+                st.subheader("📈 Velocity Analysis")
+                
+                # Check if we have pitch types
+                has_pitch_types = 'pitch_type' in df.columns and df['pitch_type'].notna().any()
+                
+                if has_pitch_types:
+                    pitch_types = df[df['pitch_type'].notna()]['pitch_type'].unique()
+                    
+                    # Add pitch type filter
+                    selected_types = st.multiselect(
+                        "Filter by pitch type (leave empty for all)",
+                        options=list(pitch_types),
+                        default=list(pitch_types),
+                        key="session_velocity_filter"
+                    )
+                    
+                    if selected_types:
+                        df_filtered = df[df['pitch_type'].isin(selected_types)]
+                    else:
+                        df_filtered = df
+                else:
+                    df_filtered = df
+                    selected_types = None
+                
                 col1, col2, col3, col4 = st.columns(4)
                 
                 with col1:
-                    st.metric("Average", f"{df['release_speed'].mean():.1f} mph")
+                    st.metric("Average", f"{df_filtered['release_speed'].mean():.1f} mph")
                 with col2:
-                    st.metric("Maximum", f"{df['release_speed'].max():.1f} mph")
+                    st.metric("Maximum", f"{df_filtered['release_speed'].max():.1f} mph")
                 with col3:
-                    st.metric("Minimum", f"{df['release_speed'].min():.1f} mph")
+                    st.metric("Minimum", f"{df_filtered['release_speed'].min():.1f} mph")
                 with col4:
-                    st.metric("Std Dev", f"{df['release_speed'].std():.2f} mph")
+                    st.metric("Std Dev", f"{df_filtered['release_speed'].std():.2f} mph")
                 
                 # Velocity progression chart
                 st.subheader("Velocity Throughout Session")
-                fig = px.line(df, x='pitch_number', y='release_speed',
-                            title='Velocity by Pitch Number',
-                            labels={'pitch_number': 'Pitch Number', 'release_speed': 'Velocity (mph)'})
+                
+                if has_pitch_types and selected_types:
+                    fig = px.scatter(df_filtered, x='pitch_number', y='release_speed',
+                                color='pitch_type',
+                                title='Velocity by Pitch Number (Color = Pitch Type)',
+                                labels={'pitch_number': 'Pitch Number', 'release_speed': 'Velocity (mph)', 'pitch_type': 'Pitch Type'})
+                    fig.add_hline(y=df_filtered['release_speed'].mean(), line_dash="dash", 
+                                line_color="gray", annotation_text="Overall Average")
+                else:
+                    fig = px.line(df_filtered, x='pitch_number', y='release_speed',
+                                title='Velocity by Pitch Number',
+                                labels={'pitch_number': 'Pitch Number', 'release_speed': 'Velocity (mph)'})
                 fig.add_hline(y=df['release_speed'].mean(), line_dash="dash", 
                             line_color="red", annotation_text="Average")
                 st.plotly_chart(fig, use_container_width=True)
@@ -484,27 +516,43 @@ def main():
             if 'horizontal_break' in df.columns and 'induced_vertical_break' in df.columns:
                 df_movement = df[df['horizontal_break'].notna() & df['induced_vertical_break'].notna()]
                 if len(df_movement) > 0:
-                    st.subheader("Movement Analysis")
+                    st.subheader("⚾ Movement Analysis")
+                    
+                    # Check for pitch types
+                    has_pitch_types = 'pitch_type' in df_movement.columns and df_movement['pitch_type'].notna().any()
+                    
                     col1, col2 = st.columns(2)
                     
                     with col1:
                         st.write("**Horizontal Break**")
-                        st.metric("Average", f"{df['horizontal_break'].mean():.2f}\"")
-                        st.metric("Range", f"{df['horizontal_break'].min():.2f}\" to {df['horizontal_break'].max():.2f}\"")
+                        st.metric("Average", f"{df_movement['horizontal_break'].mean():.2f}\"")
+                        st.metric("Range", f"{df_movement['horizontal_break'].min():.2f}\" to {df_movement['horizontal_break'].max():.2f}\"")
                     
                     with col2:
                         st.write("**Induced Vertical Break**")
-                        st.metric("Average", f"{df['induced_vertical_break'].mean():.2f}\"")
-                        st.metric("Range", f"{df['induced_vertical_break'].min():.2f}\" to {df['induced_vertical_break'].max():.2f}\"")
+                        st.metric("Average", f"{df_movement['induced_vertical_break'].mean():.2f}\"")
+                        st.metric("Range", f"{df_movement['induced_vertical_break'].min():.2f}\" to {df_movement['induced_vertical_break'].max():.2f}\"")
                     
                     # Movement chart
                     st.subheader("Pitch Movement Profile")
-                    fig = px.scatter(df_movement, x='horizontal_break', y='induced_vertical_break',
-                                   title='Movement Chart',
-                                   labels={'horizontal_break': 'Horizontal Break (in)', 
-                                          'induced_vertical_break': 'Induced Vertical Break (in)'},
-                                   hover_data=['pitch_number', 'release_speed'],
-                                   opacity=0.7)
+                    
+                    if has_pitch_types:
+                        fig = px.scatter(df_movement, x='horizontal_break', y='induced_vertical_break',
+                                       color='pitch_type',
+                                       title='Movement Chart by Pitch Type',
+                                       labels={'horizontal_break': 'Horizontal Break (in)', 
+                                              'induced_vertical_break': 'Induced Vertical Break (in)',
+                                              'pitch_type': 'Pitch Type'},
+                                       hover_data=['pitch_number', 'release_speed'],
+                                       opacity=0.7)
+                    else:
+                        fig = px.scatter(df_movement, x='horizontal_break', y='induced_vertical_break',
+                                       title='Movement Chart',
+                                       labels={'horizontal_break': 'Horizontal Break (in)', 
+                                              'induced_vertical_break': 'Induced Vertical Break (in)'},
+                                       hover_data=['pitch_number', 'release_speed'],
+                                       opacity=0.7)
+                    
                     fig.add_hline(y=0, line_dash="dash", line_color="gray")
                     fig.add_vline(x=0, line_dash="dash", line_color="gray")
                     st.plotly_chart(fig, use_container_width=True)

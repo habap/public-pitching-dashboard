@@ -425,44 +425,116 @@ def main():
             # Create DataFrame
             df = pd.DataFrame(pitches)
             
-            # Velocity over time
-            if 'release_speed' in df.columns and df['release_speed'].notna().any():
-                st.subheader("Velocity Trends")
+            # Check if we have pitch type data
+            has_pitch_types = 'pitch_type' in df.columns and df['pitch_type'].notna().any()
+            
+            if has_pitch_types:
+                # Get unique pitch types
+                pitch_types = df[df['pitch_type'].notna()]['pitch_type'].unique()
                 
-                fig = px.scatter(df, x='session_date', y='release_speed',
-                               title='Velocity Over Time',
-                               labels={'session_date': 'Date', 'release_speed': 'Velocity (mph)'},
-                               trendline='lowess')
+                # Add pitch type filter
+                st.subheader("🎯 Filter by Pitch Type")
+                selected_types = st.multiselect(
+                    "Select pitch types to display (leave empty for all)",
+                    options=list(pitch_types),
+                    default=list(pitch_types),
+                    key="analytics_pitch_type_filter"
+                )
+                
+                # Filter data if selections made
+                if selected_types:
+                    df_filtered = df[df['pitch_type'].isin(selected_types)]
+                else:
+                    df_filtered = df
+                
+                st.markdown("---")
+            else:
+                df_filtered = df
+                selected_types = None
+            
+            # Velocity over time
+            if 'release_speed' in df_filtered.columns and df_filtered['release_speed'].notna().any():
+                st.subheader("📈 Velocity Trends")
+                
+                if has_pitch_types and selected_types:
+                    # Color by pitch type
+                    fig = px.scatter(df_filtered, x='session_date', y='release_speed',
+                                   color='pitch_type',
+                                   title='Velocity Over Time by Pitch Type',
+                                   labels={'session_date': 'Date', 'release_speed': 'Velocity (mph)', 'pitch_type': 'Pitch Type'},
+                                   trendline='lowess',
+                                   trendline_scope='overall')
+                else:
+                    fig = px.scatter(df_filtered, x='session_date', y='release_speed',
+                                   title='Velocity Over Time',
+                                   labels={'session_date': 'Date', 'release_speed': 'Velocity (mph)'},
+                                   trendline='lowess')
+                
                 st.plotly_chart(fig, use_container_width=True)
                 
-                # Velocity distribution
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.metric("Average Velocity", f"{df['release_speed'].mean():.1f} mph")
-                    st.metric("Max Velocity", f"{df['release_speed'].max():.1f} mph")
-                with col2:
-                    st.metric("Min Velocity", f"{df['release_speed'].min():.1f} mph")
-                    st.metric("Std Deviation", f"{df['release_speed'].std():.1f} mph")
+                # Velocity stats by pitch type
+                if has_pitch_types and selected_types:
+                    st.subheader("Velocity by Pitch Type")
+                    
+                    cols = st.columns(min(len(selected_types), 4))
+                    for idx, pitch_type in enumerate(selected_types):
+                        pt_data = df_filtered[df_filtered['pitch_type'] == pitch_type]['release_speed']
+                        if len(pt_data) > 0:
+                            with cols[idx % len(cols)]:
+                                st.metric(
+                                    f"{pitch_type}",
+                                    f"{pt_data.mean():.1f} mph",
+                                    f"Max: {pt_data.max():.1f}"
+                                )
+                else:
+                    # Overall velocity stats
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.metric("Average Velocity", f"{df_filtered['release_speed'].mean():.1f} mph")
+                        st.metric("Max Velocity", f"{df_filtered['release_speed'].max():.1f} mph")
+                    with col2:
+                        st.metric("Min Velocity", f"{df_filtered['release_speed'].min():.1f} mph")
+                        st.metric("Std Deviation", f"{df_filtered['release_speed'].std():.1f} mph")
             
             # Spin rate over time
-            if 'spin_rate' in df.columns and df['spin_rate'].notna().any():
-                st.subheader("Spin Rate Trends")
+            if 'spin_rate' in df_filtered.columns and df_filtered['spin_rate'].notna().any():
+                st.subheader("🌀 Spin Rate Trends")
                 
-                fig = px.scatter(df, x='session_date', y='spin_rate',
-                               title='Spin Rate Over Time',
-                               labels={'session_date': 'Date', 'spin_rate': 'Spin Rate (rpm)'},
-                               trendline='lowess')
+                if has_pitch_types and selected_types:
+                    fig = px.scatter(df_filtered, x='session_date', y='spin_rate',
+                                   color='pitch_type',
+                                   title='Spin Rate Over Time by Pitch Type',
+                                   labels={'session_date': 'Date', 'spin_rate': 'Spin Rate (rpm)', 'pitch_type': 'Pitch Type'},
+                                   trendline='lowess',
+                                   trendline_scope='overall')
+                else:
+                    fig = px.scatter(df_filtered, x='session_date', y='spin_rate',
+                                   title='Spin Rate Over Time',
+                                   labels={'session_date': 'Date', 'spin_rate': 'Spin Rate (rpm)'},
+                                   trendline='lowess')
+                
                 st.plotly_chart(fig, use_container_width=True)
             
             # Movement plot
-            if 'horizontal_break' in df.columns and 'induced_vertical_break' in df.columns:
-                df_movement = df[df['horizontal_break'].notna() & df['induced_vertical_break'].notna()]
+            if 'horizontal_break' in df_filtered.columns and 'induced_vertical_break' in df_filtered.columns:
+                df_movement = df_filtered[df_filtered['horizontal_break'].notna() & df_filtered['induced_vertical_break'].notna()]
                 if len(df_movement) > 0:
-                    st.subheader("Pitch Movement")
+                    st.subheader("⚾ Pitch Movement")
                     
-                    fig = px.scatter(df_movement, x='horizontal_break', y='induced_vertical_break',
-                                   title='Pitch Movement Profile',
-                                   labels={'horizontal_break': 'Horizontal Break (in)', 
+                    if has_pitch_types and selected_types:
+                        fig = px.scatter(df_movement, x='horizontal_break', y='induced_vertical_break',
+                                       color='pitch_type',
+                                       title='Pitch Movement Profile by Pitch Type',
+                                       labels={'horizontal_break': 'Horizontal Break (in)', 
+                                              'induced_vertical_break': 'Induced Vertical Break (in)',
+                                              'pitch_type': 'Pitch Type'},
+                                       opacity=0.6)
+                    else:
+                        fig = px.scatter(df_movement, x='horizontal_break', y='induced_vertical_break',
+                                       title='Pitch Movement Profile',
+                                       labels={'horizontal_break': 'Horizontal Break (in)', 
+                                              'induced_vertical_break': 'Induced Vertical Break (in)'},
+                                       opacity=0.6) 
                                           'induced_vertical_break': 'Induced Vertical Break (in)'},
                                    opacity=0.6)
                     fig.add_hline(y=0, line_dash="dash", line_color="gray")

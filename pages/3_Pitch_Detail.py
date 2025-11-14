@@ -290,6 +290,8 @@ def main():
     with col1:
         st.subheader("Pitch Information")
         st.metric("Pitch Number", f"#{pitch['pitch_number']}")
+        if pitch.get('pitch_type'):
+            st.metric("Pitch Type", pitch['pitch_type'])
         st.write(f"**Session Date:** {pitch['session_date'].strftime('%m/%d/%Y')}")
         st.write(f"**Session Type:** {pitch['session_type']}")
         if pitch['location']:
@@ -361,46 +363,127 @@ def main():
         else:
             st.metric("Spin Efficiency", "N/A")
     
-    # Add spin axis visualization if available
-    if pitch['spin_axis']:
-        st.subheader("Spin Axis Visualization")
-        fig = go.Figure()
+    # Add spin axis and arm slot visualization if available
+    if pitch['spin_axis'] or pitch.get('arm_slot'):
+        col_viz1, col_viz2 = st.columns(2)
         
-        # Create a circle to represent the ball
-        theta = [i for i in range(0, 361, 5)]
-        r = [1] * len(theta)
+        with col_viz1:
+            if pitch['spin_axis']:
+                st.subheader("Spin Axis (Pitcher's View)")
+                fig = go.Figure()
+                
+                # Create a circle to represent the ball from pitcher's perspective
+                theta = [i for i in range(0, 361, 5)]
+                r = [1] * len(theta)
+                
+                fig.add_trace(go.Scatterpolar(
+                    r=r,
+                    theta=theta,
+                    mode='lines',
+                    line=dict(color='lightgray', width=2),
+                    showlegend=False
+                ))
+                
+                # Convert spin axis to pitcher's view (flip horizontally)
+                # In pitcher's view, 0° is up, 90° is to their right (3B side for RHP)
+                spin_angle = pitch['spin_axis']
+                
+                fig.add_trace(go.Scatterpolar(
+                    r=[0, 1],
+                    theta=[spin_angle, spin_angle],
+                    mode='lines+markers',
+                    line=dict(color='red', width=4),
+                    marker=dict(size=[0, 20], symbol='arrow', angleref='previous'),
+                    name='Spin Axis',
+                    showlegend=True
+                ))
+                
+                fig.update_layout(
+                    polar=dict(
+                        radialaxis=dict(visible=False, range=[0, 1]),
+                        angularaxis=dict(
+                            direction='clockwise', 
+                            rotation=90,
+                            ticktext=['12:00', '3:00', '6:00', '9:00'],
+                            tickvals=[0, 90, 180, 270]
+                        )
+                    ),
+                    showlegend=True,
+                    height=400,
+                    title=f"Spin: {spin_angle:.0f}° (Pitcher's Perspective)"
+                )
+                
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # Add explanation
+                if pitch['throws_hand']:
+                    if pitch['throws_hand'] == 'R':
+                        st.caption("🔵 For RHP: 12:00 = pure backspin, 3:00 = arm side (3B), 9:00 = glove side (1B)")
+                    else:
+                        st.caption("🔵 For LHP: 12:00 = pure backspin, 3:00 = glove side (3B), 9:00 = arm side (1B)")
         
-        fig.add_trace(go.Scatterpolar(
-            r=r,
-            theta=theta,
-            mode='lines',
-            line=dict(color='lightgray', width=2),
-            showlegend=False
-        ))
-        
-        # Add spin axis arrow
-        spin_angle = pitch['spin_axis']
-        fig.add_trace(go.Scatterpolar(
-            r=[0, 1],
-            theta=[spin_angle, spin_angle],
-            mode='lines+markers',
-            line=dict(color='red', width=3),
-            marker=dict(size=[0, 15], symbol='arrow', angleref='previous'),
-            name='Spin Axis',
-            showlegend=True
-        ))
-        
-        fig.update_layout(
-            polar=dict(
-                radialaxis=dict(visible=False, range=[0, 1]),
-                angularaxis=dict(direction='clockwise', rotation=90)
-            ),
-            showlegend=True,
-            height=400,
-            title="Spin Axis Direction (Catcher's View)"
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
+        with col_viz2:
+            if pitch.get('arm_slot'):
+                st.subheader("Arm Slot")
+                fig = go.Figure()
+                
+                # Create a circle to represent release point view
+                theta = [i for i in range(0, 361, 5)]
+                r = [1] * len(theta)
+                
+                fig.add_trace(go.Scatterpolar(
+                    r=r,
+                    theta=theta,
+                    mode='lines',
+                    line=dict(color='lightgray', width=2),
+                    showlegend=False
+                ))
+                
+                # Arm slot angle
+                arm_angle = pitch['arm_slot']
+                
+                fig.add_trace(go.Scatterpolar(
+                    r=[0, 1],
+                    theta=[arm_angle, arm_angle],
+                    mode='lines+markers',
+                    line=dict(color='blue', width=4),
+                    marker=dict(size=[0, 20], symbol='arrow', angleref='previous'),
+                    name='Arm Slot',
+                    showlegend=True
+                ))
+                
+                fig.update_layout(
+                    polar=dict(
+                        radialaxis=dict(visible=False, range=[0, 1]),
+                        angularaxis=dict(
+                            direction='clockwise', 
+                            rotation=90,
+                            ticktext=['12:00 (OTT)', '3:00', '6:00 (Submarine)', '9:00'],
+                            tickvals=[0, 90, 180, 270]
+                        )
+                    ),
+                    showlegend=True,
+                    height=400,
+                    title=f"Arm Slot: {arm_angle:.0f}°"
+                )
+                
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # Add description based on angle
+                if 345 <= arm_angle or arm_angle <= 15:
+                    slot_type = "Over-the-top"
+                elif 15 < arm_angle <= 60:
+                    slot_type = "High 3/4"
+                elif 60 < arm_angle <= 120:
+                    slot_type = "3/4"
+                elif 120 < arm_angle <= 150:
+                    slot_type = "Low 3/4"
+                elif 150 < arm_angle <= 200:
+                    slot_type = "Sidearm"
+                else:
+                    slot_type = "Submarine"
+                
+                st.caption(f"📐 {slot_type} delivery")
     
     st.divider()
     
