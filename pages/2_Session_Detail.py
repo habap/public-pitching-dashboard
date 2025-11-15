@@ -171,6 +171,111 @@ def get_pitch_type_summary(conn, session_id):
     
     return results
 
+def create_combined_polar_chart(pitches_df, selected_pitch_types, throws_hand):
+    """Create combined arm slot and spin direction polar chart for multiple pitches"""
+    # Filter by selected pitch types
+    if selected_pitch_types and 'All' not in selected_pitch_types:
+        pitches_df = pitches_df[pitches_df['pitch_type'].isin(selected_pitch_types)]
+    
+    if len(pitches_df) == 0:
+        return None
+    
+    fig = go.Figure()
+    
+    # Create circle background
+    theta = list(range(0, 361, 5))
+    r = [1] * len(theta)
+    
+    fig.add_trace(go.Scatterpolar(
+        r=r,
+        theta=theta,
+        mode='lines',
+        line=dict(color='lightgray', width=2),
+        showlegend=False,
+        hoverinfo='skip'
+    ))
+    
+    # Plot arm slots (blue)
+    arm_slots = pitches_df[pitches_df['arm_slot'].notna()]['arm_slot'].astype(float).tolist()
+    if arm_slots:
+        fig.add_trace(go.Scatterpolar(
+            r=[0.9] * len(arm_slots),
+            theta=arm_slots,
+            mode='markers',
+            marker=dict(size=8, color='blue', opacity=0.6),
+            name='Arm Slot',
+            showlegend=True
+        ))
+    
+    # Plot spin directions (red)
+    spin_axes = pitches_df[pitches_df['spin_axis'].notna()]['spin_axis'].astype(float).tolist()
+    if spin_axes:
+        fig.add_trace(go.Scatterpolar(
+            r=[1.0] * len(spin_axes),
+            theta=spin_axes,
+            mode='markers',
+            marker=dict(size=8, color='red', opacity=0.6),
+            name='Spin Direction',
+            showlegend=True
+        ))
+    
+    # Determine arm side and glove side labels based on throwing hand
+    if throws_hand == 'R':
+        arm_side = "9:00 (Arm Side)"
+        glove_side = "3:00 (Glove Side)"
+    else:
+        arm_side = "3:00 (Arm Side)"
+        glove_side = "9:00 (Glove Side)"
+    
+    fig.update_layout(
+        polar=dict(
+            radialaxis=dict(visible=False, range=[0, 1.1]),
+            angularaxis=dict(
+                direction='clockwise',
+                rotation=90,
+                ticktext=['12:00 (OTT)', glove_side, '6:00 (Sub)', arm_side],
+                tickvals=[0, 90, 180, 270]
+            )
+        ),
+        showlegend=True,
+        height=500,
+        title="Release Mechanics (Pitcher's View)"
+    )
+    
+    return fig
+
+def create_spin_rate_chart(pitches_df, selected_pitch_types):
+    """Create spin rate progression chart with pitch type filtering"""
+    # Filter by selected pitch types
+    if selected_pitch_types and 'All' not in selected_pitch_types:
+        pitches_df = pitches_df[pitches_df['pitch_type'].isin(selected_pitch_types)]
+    
+    if len(pitches_df) == 0 or 'spin_rate' not in pitches_df.columns:
+        return None
+    
+    pitches_df = pitches_df.dropna(subset=['spin_rate'])
+    
+    if len(pitches_df) == 0:
+        return None
+    
+    # Add pitch number in session
+    pitches_df['pitch_num'] = range(1, len(pitches_df) + 1)
+    
+    fig = px.line(pitches_df, x='pitch_num', y='spin_rate', 
+                  title='Spin Rate Progression',
+                  labels={'pitch_num': 'Pitch Number in Session', 'spin_rate': 'Spin Rate (rpm)'},
+                  markers=True)
+    
+    # Color by pitch type if available
+    if 'pitch_type' in pitches_df.columns:
+        fig = px.line(pitches_df, x='pitch_num', y='spin_rate', color='pitch_type',
+                      title='Spin Rate Progression by Pitch Type',
+                      labels={'pitch_num': 'Pitch Number in Session', 'spin_rate': 'Spin Rate (rpm)'},
+                      markers=True)
+    
+    fig.update_layout(height=400)
+    return fig
+
 def main():
     st.title("📋 Session Detail")
     
@@ -428,6 +533,19 @@ def main():
                 st.caption("📌 Format: Min / Avg / Max")
                 
                 st.markdown("---")
+
+            # Pitch type filter for charts
+            st.subheader("Analytics")
+            if 'pitch_type' in pitches_df.columns:
+                pitch_types = ['All'] + sorted(pitches_df['pitch_type'].dropna().unique().tolist())
+                selected_pitch_types = st.multiselect(
+                    "Filter by Pitch Type",
+                    options=pitch_types,
+                    default=['All'],
+                    key='pitch_type_filter'
+                )
+            else:
+                selected_pitch_types = ['All']
             
             # Velocity stats
             if 'release_speed' in df.columns and df['release_speed'].notna().any():
@@ -484,12 +602,14 @@ def main():
                             line_color="red", annotation_text="Average")
                 st.plotly_chart(fig, use_container_width=True)
                 
-                # Velocity distribution
-                fig = px.histogram(df, x='release_speed', nbins=20,
-                                 title='Velocity Distribution',
-                                 labels={'release_speed': 'Velocity (mph)', 'count': 'Number of Pitches'})
-                st.plotly_chart(fig, use_container_width=True)
-            
+                # Combined polar chart (replaces velocity distribution)
+                st.subheader("Release Mechanics")
+                fig = create_combined_polar_chart(pitches_df, selected_pitch_types, session['throws_hand'])
+                if fig:
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.info("Release mechanics data not available for selected pitch types")
+                    
             # Spin rate stats
             if 'spin_rate' in df.columns and df['spin_rate'].notna().any():
                 st.subheader("Spin Rate Analysis")
