@@ -548,8 +548,6 @@ def main():
                                        labels={'horizontal_break': 'Horizontal Break (in)', 
                                               'induced_vertical_break': 'Induced Vertical Break (in)'},
                                        opacity=0.6) 
-                                          'induced_vertical_break': 'Induced Vertical Break (in)'},
-                                   opacity=0.6)
                     fig.add_hline(y=0, line_dash="dash", line_color="gray")
                     fig.add_vline(x=0, line_dash="dash", line_color="gray")
                     st.plotly_chart(fig, use_container_width=True)
