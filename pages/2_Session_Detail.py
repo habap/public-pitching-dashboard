@@ -536,8 +536,8 @@ def main():
 
             # Pitch type filter for charts
             st.subheader("Analytics")
-            if 'pitch_type' in pitches_df.columns:
-                pitch_types = ['All'] + sorted(pitches_df['pitch_type'].dropna().unique().tolist())
+            if 'pitch_type' in df.columns:
+                pitch_types = ['All'] + sorted(df['pitch_type'].dropna().unique().tolist())
                 selected_pitch_types = st.multiselect(
                     "Filter by Pitch Type",
                     options=pitch_types,
@@ -604,7 +604,7 @@ def main():
                 
                 # Combined polar chart (replaces velocity distribution)
                 st.subheader("Release Mechanics")
-                fig = create_combined_polar_chart(pitches_df, selected_pitch_types, session['throws_hand'])
+                fig = create_combined_polar_chart(df, selected_pitch_types, session['throws_hand'])
                 if fig:
                     st.plotly_chart(fig, use_container_width=True)
                 else:
