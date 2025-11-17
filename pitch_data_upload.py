@@ -796,32 +796,44 @@ def process_csv(df, player_id, data_source_name, session_id, filename, bulk_mode
                 stats['errors'].append(f"Could not match pitcher '{pitcher_name}' - {len(pitcher_df)} pitches skipped")
                 continue
             
-            # Create session for this player
-            session_date = extract_session_date(pitcher_df)
-            session_type_to_use = bulk_session_type if bulk_session_type else "Bullpen"
-            location_to_use = bulk_location if bulk_location else ""
+            # Group this player's data by date to create separate sessions
+            # Extract dates for all pitches
+            if 'Date' in pitcher_df.columns:
+                pitcher_df['_session_date'] = pd.to_datetime(pitcher_df['Date']).dt.date
+            else:
+                # If no date column, use today for all
+                pitcher_df['_session_date'] = datetime.now().date()
             
-            matched_session_id = create_training_session(
-                conn, matched_player_id, session_date, session_type_to_use, 
-                data_source_id, len(pitcher_df), location_to_use, None, f"Bulk upload from {filename}"
-            )
-            stats['sessions_created'] += 1
+            # Group by date
+            date_groups = pitcher_df.groupby('_session_date')
             
-            # Process pitches for this player
-            player_stats = process_pitcher_data(
-                conn, pitcher_df, matched_player_id, data_source_name, 
-                data_source_id, matched_session_id, filename
-            )
+            for session_date, date_df in date_groups:
+                # Create a separate session for each date
+                session_type_to_use = bulk_session_type if bulk_session_type else "Bullpen"
+                location_to_use = bulk_location if bulk_location else ""
+                
+                matched_session_id = create_training_session(
+                    conn, matched_player_id, session_date, session_type_to_use, 
+                    data_source_id, len(date_df), location_to_use, None, 
+                    f"Bulk upload from {filename} - {session_date}"
+                )
+                stats['sessions_created'] += 1
+                
+                # Process pitches for this player on this date
+                player_stats = process_pitcher_data(
+                    conn, date_df, matched_player_id, data_source_name, 
+                    data_source_id, matched_session_id, filename
+                )
+                
+                stats['inserted'] += player_stats['inserted']
+                stats['skipped'] += player_stats['skipped']
+                stats['errors'].extend(player_stats['errors'])
             
-            stats['inserted'] += player_stats['inserted']
-            stats['skipped'] += player_stats['skipped']
-            stats['errors'].extend(player_stats['errors'])
-            
-            # Track per-player stats
+            # Track per-player stats (summary across all dates)
             stats['players_processed'][pitcher_name] = {
                 'player_id': matched_player_id,
-                'pitches': player_stats['inserted'],
-                'session_id': matched_session_id,
+                'pitches': len(pitcher_df),
+                'sessions': len(date_groups),
                 'external_id': external_id
             }
     
@@ -1365,11 +1377,35 @@ def main():
                 conn.close()
                 return
             
+            # Create searchable player list
             player_options = {f"{p['player_name']} ({p['graduation_year']})": p['player_id'] 
                              for p in players}
             
-            selected_player = st.selectbox("Choose a player", list(player_options.keys()))
-            player_id = player_options[selected_player]
+            # Type-ahead search box
+            search_term = st.text_input(
+                "Search for a player (type name to filter)",
+                placeholder="Start typing player name...",
+                key="player_search"
+            )
+            
+            # Filter players based on search
+            if search_term:
+                filtered_players = [name for name in player_options.keys() 
+                                   if search_term.lower() in name.lower()]
+            else:
+                filtered_players = list(player_options.keys())
+            
+            # Show filtered results
+            if filtered_players:
+                selected_player = st.selectbox(
+                    "Select player",
+                    filtered_players,
+                    key="player_select"
+                )
+                player_id = player_options[selected_player]
+            else:
+                st.warning(f"No players found matching '{search_term}'")
+                return
             
             # Step 4: Configure Session
             st.header("4️⃣ Session Details")
