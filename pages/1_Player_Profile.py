@@ -422,7 +422,7 @@ def main():
         pitches = get_player_pitch_data(conn, player_id, 1000)
         
         if pitches and len(pitches) > 0:
-            if 'pitch_type' in pitches.columns:
+            if 'pitch_type' in df.columns:
                 st.subheader("Pitch Type Breakdown")
                 pitch_type_counts = pitches['pitch_type'].value_counts()
     
