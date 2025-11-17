@@ -305,7 +305,7 @@ def main():
                                 st.caption(f"📊 {type_summary}")
                     
                     with col5:
-                        if st.button("View", key=f"session_{session['session_id']}", use_container_width=True):
+                        if st.button("View", key=f"session_{session['session_id']}", width='stretch'):
                             # Store the selected session ID in session state
                             st.session_state['selected_session_id'] = session['session_id']
                             # Navigate to Session Detail page
@@ -344,7 +344,7 @@ def main():
                 })
             
             df = pd.DataFrame(pitch_data)
-            st.dataframe(df, use_container_width=True, hide_index=True)
+            st.dataframe(df, width='stretch', hide_index=True)
             
             # Download button
             csv = df.to_csv(index=False)
@@ -405,13 +405,13 @@ def main():
                 })
             
             df = pd.DataFrame(location_data)
-            st.dataframe(df, use_container_width=True, hide_index=True)
+            st.dataframe(df, width='stretch', hide_index=True)
             
             # Simple bar chart of sessions by location
             fig = px.bar(df, x='Location', y='Sessions', 
                         title='Sessions by Location',
                         labels={'Sessions': 'Number of Sessions'})
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
         else:
             st.info("No location data recorded for this player")
     
@@ -483,7 +483,7 @@ def main():
                                    labels={'session_date': 'Date', 'release_speed': 'Velocity (mph)'},
                                    trendline='lowess')
                 
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width='stretch')
                 
                 # Velocity stats by pitch type
                 if has_pitch_types and selected_types:
@@ -526,7 +526,7 @@ def main():
                                    labels={'session_date': 'Date', 'spin_rate': 'Spin Rate (rpm)'},
                                    trendline='lowess')
                 
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width='stretch')
             
             # Movement plot
             if 'horizontal_break' in df_filtered.columns and 'induced_vertical_break' in df_filtered.columns:
@@ -550,7 +550,7 @@ def main():
                                        opacity=0.6) 
                     fig.add_hline(y=0, line_dash="dash", line_color="gray")
                     fig.add_vline(x=0, line_dash="dash", line_color="gray")
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width='stretch')
         else:
             st.info("No pitch data available for analytics")
     
