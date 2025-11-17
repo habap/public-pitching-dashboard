@@ -422,6 +422,9 @@ def main():
         pitches = get_player_pitch_data(conn, player_id, 1000)
         
         if pitches and len(pitches) > 0:
+            # Create DataFrame
+            df = pd.DataFrame(pitches)
+            
             if 'pitch_type' in df.columns:
                 st.subheader("Pitch Type Breakdown")
                 pitch_type_counts = pitches['pitch_type'].value_counts()
@@ -434,9 +437,6 @@ def main():
                             st.session_state['selected_player_id'] = player_id
                             st.session_state['selected_pitch_type'] = pitch_type
                             st.switch_page("pages/4_Pitch_Type_Analysis.py")
-            
-            # Create DataFrame
-            df = pd.DataFrame(pitches)
             
             # Check if we have pitch type data
             has_pitch_types = 'pitch_type' in df.columns and df['pitch_type'].notna().any()
