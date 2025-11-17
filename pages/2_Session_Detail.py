@@ -466,7 +466,7 @@ def main():
                         st.write(" | ".join(movement) if movement else "No movement data")
                     
                     with col5:
-                        if st.button("View", key=f"pitch_{pitch['pitch_id']}", use_container_width=True):
+                        if st.button("View", key=f"pitch_{pitch['pitch_id']}", width='stretch'):
                             # Store both pitch and session info in session state
                             st.session_state['selected_pitch_id'] = pitch['pitch_id']
                             st.session_state['selected_session_id'] = session_id
@@ -529,7 +529,7 @@ def main():
                     })
                 
                 summary_df = pd.DataFrame(summary_data)
-                st.dataframe(summary_df, use_container_width=True, hide_index=True)
+                st.dataframe(summary_df, width='stretch', hide_index=True)
                 st.caption("📌 Format: Min / Avg / Max")
                 
                 st.markdown("---")
@@ -600,13 +600,13 @@ def main():
                                 labels={'pitch_number': 'Pitch Number', 'release_speed': 'Velocity (mph)'})
                 fig.add_hline(y=df['release_speed'].mean(), line_dash="dash", 
                             line_color="red", annotation_text="Average")
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width='stretch')
                 
                 # Combined polar chart (replaces velocity distribution)
                 st.subheader("Release Mechanics")
                 fig = create_combined_polar_chart(df, selected_pitch_types, session['throws_hand'])
                 if fig:
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width='stretch')
                 else:
                     st.info("Release mechanics data not available for selected pitch types")
                     
@@ -630,7 +630,7 @@ def main():
                             labels={'pitch_number': 'Pitch Number', 'spin_rate': 'Spin Rate (rpm)'})
                 fig.add_hline(y=df['spin_rate'].mean(), line_dash="dash", 
                             line_color="red", annotation_text="Average")
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width='stretch')
             
             # Movement analysis
             if 'horizontal_break' in df.columns and 'induced_vertical_break' in df.columns:
@@ -675,7 +675,7 @@ def main():
                     
                     fig.add_hline(y=0, line_dash="dash", line_color="gray")
                     fig.add_vline(x=0, line_dash="dash", line_color="gray")
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width='stretch')
         else:
             st.info("No pitch data available for analytics")
     
