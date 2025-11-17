@@ -422,9 +422,9 @@ def main():
         pitches = get_player_pitch_data(conn, player_id, 1000)
         
         if pitches and len(pitches) > 0:
-            if 'pitch_type' in all_pitches_df.columns:
+            if 'pitch_type' in pitches.columns:
                 st.subheader("Pitch Type Breakdown")
-                pitch_type_counts = all_pitches_df['pitch_type'].value_counts()
+                pitch_type_counts = pitches['pitch_type'].value_counts()
     
                 # Display pitch types as clickable buttons
                 cols = st.columns(min(len(pitch_type_counts), 5))
@@ -453,7 +453,7 @@ def main():
                     default=list(pitch_types),
                     key="analytics_pitch_type_filter"
                 )
-                
+            
                 # Filter data if selections made
                 if selected_types:
                     df_filtered = df[df['pitch_type'].isin(selected_types)]
