@@ -428,7 +428,7 @@ def main():
             # Convert session_date to datetime for Plotly compatibility
             if 'session_date' in df.columns:
                 df['session_date'] = pd.to_datetime(df['session_date'])
-
+            
             if 'pitch_type' in df.columns:
                 st.subheader("Pitch Type Breakdown")
                 pitch_type_counts = df['pitch_type'].value_counts()
