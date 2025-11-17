@@ -525,14 +525,14 @@ col1, col2 = st.columns(2)
 with col1:
     fig = create_velocity_over_time(pitches_df)
     if fig:
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
     else:
         st.info("Velocity data not available")
 
 with col2:
     fig = create_spin_rate_over_time(pitches_df)
     if fig:
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
     else:
         st.info("Spin rate data not available")
 
@@ -540,7 +540,7 @@ with col2:
 st.subheader("Release Mechanics")
 fig = create_combined_polar_chart(pitches_df, throws_hand)
 if fig:
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 else:
     st.info("Release mechanics data not available")
 
@@ -548,6 +548,6 @@ else:
 st.subheader("Pitch Movement by Session")
 fig = create_movement_chart(pitches_df)
 if fig:
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 else:
     st.info("Movement data not available")
