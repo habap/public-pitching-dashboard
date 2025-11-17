@@ -170,11 +170,11 @@ def main():
         if coach.get('photo'):
             try:
                 image = Image.open(BytesIO(coach['photo']))
-                st.image(image, caption=f"{coach['first_name']} {coach['last_name']}", use_container_width=True)
+                st.image(image, caption=f"{coach['first_name']} {coach['last_name']}", width='stretch')
             except:
-                st.image("https://via.placeholder.com/300x400?text=No+Photo", use_container_width=True)
+                st.image("https://via.placeholder.com/300x400?text=No+Photo", width='stretch')
         else:
-            st.image("https://via.placeholder.com/300x400?text=No+Photo", use_container_width=True)
+            st.image("https://via.placeholder.com/300x400?text=No+Photo", width='stretch')
         
         # Photo upload
         with st.expander("📸 Upload Photo"):
@@ -313,7 +313,7 @@ def main():
                 })
             
             df = pd.DataFrame(session_data)
-            st.dataframe(df, use_container_width=True, hide_index=True)
+            st.dataframe(df, width='stretch', hide_index=True)
             
             st.info("💡 Tip: Go to Session Detail page to view individual session details")
         else:
