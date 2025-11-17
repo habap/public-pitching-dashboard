@@ -427,7 +427,7 @@ def main():
             
             if 'pitch_type' in df.columns:
                 st.subheader("Pitch Type Breakdown")
-                pitch_type_counts = pitches['pitch_type'].value_counts()
+                pitch_type_counts = df['pitch_type'].value_counts()
     
                 # Display pitch types as clickable buttons
                 cols = st.columns(min(len(pitch_type_counts), 5))
