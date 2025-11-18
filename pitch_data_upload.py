@@ -1381,19 +1381,34 @@ def main():
             player_options = {f"{p['player_name']} ({p['graduation_year']})": p['player_id'] 
                              for p in players}
             
-            # Type-ahead search box
-            search_term = st.text_input(
-                "Search for a player (type name to filter)",
-                placeholder="Start typing player name...",
-                key="player_search"
-            )
+            # Type-ahead search box with live filtering
+            col1, col2 = st.columns([4, 1])
+            
+            with col1:
+                search_term = st.text_input(
+                    "🔍 Search for a player",
+                    placeholder="Type name, graduation year, or any text to filter...",
+                    key="player_search",
+                    help="Start typing to see matching players below"
+                )
+            
+            with col2:
+                if search_term and st.button("✖ Clear", key="clear_search"):
+                    st.session_state.player_search = ""
+                    st.rerun()
             
             # Filter players based on search
             if search_term:
                 filtered_players = [name for name in player_options.keys() 
                                    if search_term.lower() in name.lower()]
+                # Show match count
+                if filtered_players:
+                    st.info(f"✓ Found {len(filtered_players)} player(s) matching '{search_term}'")
+                else:
+                    st.warning(f"No players found matching '{search_term}'. Try a different search.")
             else:
                 filtered_players = list(player_options.keys())
+                st.caption(f"💡 {len(filtered_players)} total players available - type above to filter")
             
             # Show filtered results
             if filtered_players:

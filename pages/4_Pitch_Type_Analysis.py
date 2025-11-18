@@ -348,21 +348,55 @@ with col1:
     player_options = {f"{p['last_name']}, {p['first_name']}": p['player_id'] for p in players}
     
     # Check if we have a pre-selected player
-    selected_player_name = None
-    if 'selected_player_id' in st.session_state:
+    selected_player_id_from_state = st.session_state.get('selected_player_id')
+    
+    # Type-ahead search for player
+    search_col1, search_col2 = st.columns([4, 1])
+    
+    with search_col1:
+        search_term = st.text_input(
+            "🔍 Search player",
+            placeholder="Type to filter...",
+            key="pitch_type_player_search",
+            label_visibility="collapsed"
+        )
+    
+    with search_col2:
+        if search_term and st.button("✖", key="clear_pitch_type_search"):
+            st.session_state.pitch_type_player_search = ""
+            st.rerun()
+    
+    # Filter players based on search
+    if search_term:
+        filtered_player_options = {name: pid for name, pid in player_options.items() 
+                                  if search_term.lower() in name.lower()}
+        if filtered_player_options:
+            st.caption(f"✓ {len(filtered_player_options)} player(s)")
+        else:
+            st.warning("No matches")
+            st.stop()
+    else:
+        filtered_player_options = player_options
+        st.caption(f"💡 {len(filtered_player_options)} players")
+    
+    # Determine default index
+    default_index = 0
+    if selected_player_id_from_state:
         selected_player_name = next(
-            (name for name, pid in player_options.items() if pid == st.session_state['selected_player_id']),
+            (name for name, pid in filtered_player_options.items() if pid == selected_player_id_from_state),
             None
         )
+        if selected_player_name:
+            default_index = list(filtered_player_options.keys()).index(selected_player_name)
     
     selected_player_name = st.selectbox(
         "Player",
-        options=list(player_options.keys()),
-        index=list(player_options.keys()).index(selected_player_name) if selected_player_name else 0,
+        options=list(filtered_player_options.keys()),
+        index=default_index,
         key='player_selector'
     )
     
-    selected_player_id = player_options[selected_player_name]
+    selected_player_id = filtered_player_options[selected_player_name]
 
 with col2:
     # Get pitch types for selected player

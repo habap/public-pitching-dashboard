@@ -204,19 +204,54 @@ def main():
     # Check if a player was pre-selected (from Session or Pitch Detail page)
     selected_player_id = st.session_state.get('selected_player_id')
     
-    # If there's a pre-selected player, use it as default
-    if selected_player_id and selected_player_id in player_options.values():
-        # Find the index of the selected player
-        default_index = list(player_options.values()).index(selected_player_id)
+    # Type-ahead search box with live filtering
+    col1, col2 = st.columns([4, 1])
+    
+    with col1:
+        search_term = st.text_input(
+            "🔍 Search for a player",
+            placeholder="Type name, graduation year, or any text to filter...",
+            key="player_profile_search",
+            help="Start typing to see matching players below"
+        )
+    
+    with col2:
+        if search_term and st.button("✖ Clear", key="clear_profile_search"):
+            st.session_state.player_profile_search = ""
+            st.rerun()
+    
+    # Filter players based on search
+    if search_term:
+        filtered_options = {name: pid for name, pid in player_options.items() 
+                          if search_term.lower() in name.lower()}
+        # Show match count
+        if filtered_options:
+            st.info(f"✓ Found {len(filtered_options)} player(s) matching '{search_term}'")
+        else:
+            st.warning(f"No players found matching '{search_term}'. Try a different search.")
     else:
-        default_index = 0
+        filtered_options = player_options
+        st.caption(f"💡 {len(filtered_options)} total players available - type above to filter")
+    
+    # Show filtered results in selectbox
+    if not filtered_options:
+        st.error("No players match your search")
+        conn.close()
+        return
+    
+    # If there's a pre-selected player and it's in filtered list, use it as default
+    default_index = 0
+    if selected_player_id and selected_player_id in filtered_options.values():
+        # Find the index of the selected player in filtered list
+        default_index = list(filtered_options.values()).index(selected_player_id)
     
     selected_player = st.selectbox(
         "Select a player", 
-        list(player_options.keys()),
-        index=default_index
+        list(filtered_options.keys()),
+        index=default_index,
+        key="player_profile_select"
     )
-    player_id = player_options[selected_player]
+    player_id = filtered_options[selected_player]
     
     # Clear the selected player from state after using it
     if 'selected_player_id' in st.session_state:
@@ -425,13 +460,9 @@ def main():
             # Create DataFrame
             df = pd.DataFrame(pitches)
             
-            # Convert session_date to datetime for Plotly compatibility
-            if 'session_date' in df.columns:
-                df['session_date'] = pd.to_datetime(df['session_date'])
-            
             if 'pitch_type' in df.columns:
                 st.subheader("Pitch Type Breakdown")
-                pitch_type_counts = df['pitch_type'].value_counts()
+                pitch_type_counts = pitches['pitch_type'].value_counts()
     
                 # Display pitch types as clickable buttons
                 cols = st.columns(min(len(pitch_type_counts), 5))
