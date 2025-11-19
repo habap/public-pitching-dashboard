@@ -198,8 +198,10 @@ def main():
         conn.close()
         return
     
+    # Create alphabetically sorted player options
     player_options = {f"{p['player_name']} ({p['graduation_year']})": p['player_id'] 
                      for p in players}
+    sorted_player_names = sorted(player_options.keys())
     
     # Check if a player was pre-selected (from Session or Pitch Detail page)
     selected_player_id = st.session_state.get('selected_player_id')
@@ -211,15 +213,17 @@ def main():
         st.session_state.clear_player_search = False
         st.rerun()
     
-    # Type-ahead search box with live filtering
+    # Type-ahead search box with live filtering using on_change
     col1, col2 = st.columns([4, 1])
     
     with col1:
+        # Use on_change to trigger rerun on every keypress
         search_term = st.text_input(
             "🔍 Search for a player",
             placeholder="Type name, graduation year, or any text to filter...",
             key="player_profile_search",
-            help="Start typing to see matching players below"
+            help="Start typing to see matching players below",
+            on_change=lambda: None  # Triggers rerun on each keypress
         )
     
     with col2:
@@ -228,20 +232,21 @@ def main():
                 st.session_state.clear_player_search = True
                 st.rerun()
     
-    # Filter players based on search
+    # Filter players based on search (alphabetically sorted)
     if search_term:
-        filtered_options = {name: pid for name, pid in player_options.items() 
-                          if search_term.lower() in name.lower()}
+        filtered_names = [name for name in sorted_player_names 
+                         if search_term.lower() in name.lower()]
+        filtered_options = {name: player_options[name] for name in filtered_names}
         # Show match count
         if filtered_options:
             st.info(f"✓ Found {len(filtered_options)} player(s) matching '{search_term}'")
         else:
             st.warning(f"No players found matching '{search_term}'. Try a different search.")
     else:
-        filtered_options = player_options
+        filtered_options = {name: player_options[name] for name in sorted_player_names}
         st.caption(f"💡 {len(filtered_options)} total players available - type above to filter")
     
-    # Show filtered results in selectbox
+    # Show filtered results in selectbox (already sorted alphabetically)
     if not filtered_options:
         st.error("No players match your search")
         conn.close()
@@ -249,13 +254,17 @@ def main():
     
     # If there's a pre-selected player and it's in filtered list, use it as default
     default_index = 0
+    filtered_names_list = list(filtered_options.keys())
     if selected_player_id and selected_player_id in filtered_options.values():
         # Find the index of the selected player in filtered list
-        default_index = list(filtered_options.values()).index(selected_player_id)
+        for idx, name in enumerate(filtered_names_list):
+            if filtered_options[name] == selected_player_id:
+                default_index = idx
+                break
     
     selected_player = st.selectbox(
         "Select a player", 
-        list(filtered_options.keys()),
+        filtered_names_list,
         index=default_index,
         key="player_profile_select"
     )
