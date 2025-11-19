@@ -204,6 +204,13 @@ def main():
     # Check if a player was pre-selected (from Session or Pitch Detail page)
     selected_player_id = st.session_state.get('selected_player_id')
     
+    # Handle clear button trigger
+    if 'clear_player_search' in st.session_state and st.session_state.clear_player_search:
+        if 'player_profile_search' in st.session_state:
+            del st.session_state.player_profile_search
+        st.session_state.clear_player_search = False
+        st.rerun()
+    
     # Type-ahead search box with live filtering
     col1, col2 = st.columns([4, 1])
     
@@ -216,9 +223,10 @@ def main():
         )
     
     with col2:
-        if search_term and st.button("✖ Clear", key="clear_profile_search"):
-            st.session_state.player_profile_search = ""
-            st.rerun()
+        if search_term:
+            if st.button("✖ Clear", key="clear_profile_search_button"):
+                st.session_state.clear_player_search = True
+                st.rerun()
     
     # Filter players based on search
     if search_term:
@@ -462,7 +470,7 @@ def main():
             
             if 'pitch_type' in df.columns:
                 st.subheader("Pitch Type Breakdown")
-                pitch_type_counts = pitches['pitch_type'].value_counts()
+                pitch_type_counts = df['pitch_type'].value_counts()
     
                 # Display pitch types as clickable buttons
                 cols = st.columns(min(len(pitch_type_counts), 5))
