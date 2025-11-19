@@ -1381,6 +1381,13 @@ def main():
             player_options = {f"{p['player_name']} ({p['graduation_year']})": p['player_id'] 
                              for p in players}
             
+            # Handle clear button trigger
+            if 'clear_upload_search' in st.session_state and st.session_state.clear_upload_search:
+                if 'player_search' in st.session_state:
+                    del st.session_state.player_search
+                st.session_state.clear_upload_search = False
+                st.rerun()
+            
             # Type-ahead search box with live filtering
             col1, col2 = st.columns([4, 1])
             
@@ -1393,9 +1400,10 @@ def main():
                 )
             
             with col2:
-                if search_term and st.button("✖ Clear", key="clear_search"):
-                    st.session_state.player_search = ""
-                    st.rerun()
+                if search_term:
+                    if st.button("✖ Clear", key="clear_search_button"):
+                        st.session_state.clear_upload_search = True
+                        st.rerun()
             
             # Filter players based on search
             if search_term:
