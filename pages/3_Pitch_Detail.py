@@ -252,10 +252,12 @@ def main():
         return
     
     # Step 1: Player selection
+    # Create alphabetically sorted player options
     player_options = {
         f"{p['player_name']} ({p['graduation_year']})": p['player_id'] 
         for p in players
     }
+    sorted_player_names = sorted(player_options.keys())
     
     # Handle clear button trigger
     if 'clear_pitch_player_search' in st.session_state and st.session_state.clear_pitch_player_search:
@@ -272,7 +274,8 @@ def main():
             "🔍 Search for a player",
             placeholder="Type name, graduation year, or any text to filter...",
             key="pitch_detail_player_search",
-            help="Start typing to see matching players below"
+            help="Start typing to see matching players below",
+            on_change=lambda: None  # Triggers rerun on each keypress
         )
     
     with col2:
@@ -281,16 +284,17 @@ def main():
                 st.session_state.clear_pitch_player_search = True
                 st.rerun()
     
-    # Filter players based on search
+    # Filter players based on search (alphabetically sorted)
     if search_term:
-        filtered_options = {name: pid for name, pid in player_options.items() 
-                          if search_term.lower() in name.lower()}
+        filtered_names = [name for name in sorted_player_names 
+                         if search_term.lower() in name.lower()]
+        filtered_options = {name: player_options[name] for name in filtered_names}
         if filtered_options:
             st.info(f"✓ Found {len(filtered_options)} player(s) matching '{search_term}'")
         else:
             st.warning(f"No players found matching '{search_term}'. Try a different search.")
     else:
-        filtered_options = player_options
+        filtered_options = {name: player_options[name] for name in sorted_player_names}
         st.caption(f"💡 {len(filtered_options)} total players available - type above to filter")
     
     if not filtered_options:
@@ -299,14 +303,17 @@ def main():
         return
     
     # If there's a preselected player and it's in filtered list, use it as default
+    default_player_index = 0
+    filtered_names_list = list(filtered_options.keys())
     if preselected_player_id and preselected_player_id in filtered_options.values():
-        default_player_index = list(filtered_options.values()).index(preselected_player_id)
-    else:
-        default_player_index = 0
+        for idx, name in enumerate(filtered_names_list):
+            if filtered_options[name] == preselected_player_id:
+                default_player_index = idx
+                break
     
     selected_player = st.selectbox(
         "👤 Select Player",
-        list(filtered_options.keys()),
+        filtered_names_list,
         index=default_player_index,
         key="pitch_detail_player_selector"
     )
