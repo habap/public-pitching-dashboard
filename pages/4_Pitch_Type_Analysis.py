@@ -346,6 +346,7 @@ with col1:
     # Get all players
     players = get_all_players()
     player_options = {f"{p['last_name']}, {p['first_name']}": p['player_id'] for p in players}
+    sorted_player_names = sorted(player_options.keys())
     
     # Check if we have a pre-selected player
     selected_player_id_from_state = st.session_state.get('selected_player_id')
@@ -365,7 +366,8 @@ with col1:
             "🔍 Search player",
             placeholder="Type to filter...",
             key="pitch_type_player_search",
-            label_visibility="collapsed"
+            label_visibility="collapsed",
+            on_change=lambda: None  # Triggers rerun on each keypress
         )
     
     with search_col2:
@@ -374,32 +376,32 @@ with col1:
                 st.session_state.clear_pitch_type_search = True
                 st.rerun()
     
-    # Filter players based on search
+    # Filter players based on search (alphabetically sorted)
     if search_term:
-        filtered_player_options = {name: pid for name, pid in player_options.items() 
-                                  if search_term.lower() in name.lower()}
+        filtered_names = [name for name in sorted_player_names
+                         if search_term.lower() in name.lower()]
+        filtered_player_options = {name: player_options[name] for name in filtered_names}
         if filtered_player_options:
             st.caption(f"✓ {len(filtered_player_options)} player(s)")
         else:
             st.warning("No matches")
             st.stop()
     else:
-        filtered_player_options = player_options
+        filtered_player_options = {name: player_options[name] for name in sorted_player_names}
         st.caption(f"💡 {len(filtered_player_options)} players")
     
     # Determine default index
     default_index = 0
+    filtered_names_list = list(filtered_player_options.keys())
     if selected_player_id_from_state:
-        selected_player_name = next(
-            (name for name, pid in filtered_player_options.items() if pid == selected_player_id_from_state),
-            None
-        )
-        if selected_player_name:
-            default_index = list(filtered_player_options.keys()).index(selected_player_name)
+        for idx, name in enumerate(filtered_names_list):
+            if filtered_player_options[name] == selected_player_id_from_state:
+                default_index = idx
+                break
     
     selected_player_name = st.selectbox(
         "Player",
-        options=list(filtered_player_options.keys()),
+        options=filtered_names_list,
         index=default_index,
         key='player_selector'
     )
