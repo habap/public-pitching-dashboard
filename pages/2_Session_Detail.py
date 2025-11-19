@@ -302,61 +302,20 @@ def main():
         for p in players
     }
     
-    # Handle clear button trigger
-    if 'clear_session_player_search' in st.session_state and st.session_state.clear_session_player_search:
-        if 'session_detail_player_search' in st.session_state:
-            del st.session_state.session_detail_player_search
-        st.session_state.clear_session_player_search = False
-        st.rerun()
-    
-    # Type-ahead search box with live filtering
-    col1, col2 = st.columns([4, 1])
-    
-    with col1:
-        search_term = st.text_input(
-            "🔍 Search for a player",
-            placeholder="Type name, graduation year, or any text to filter...",
-            key="session_detail_player_search",
-            help="Start typing to see matching players below"
-        )
-    
-    with col2:
-        if search_term:
-            if st.button("✖ Clear", key="clear_session_player_search_button"):
-                st.session_state.clear_session_player_search = True
-                st.rerun()
-    
-    # Filter players based on search
-    if search_term:
-        filtered_options = {name: pid for name, pid in player_options.items() 
-                          if search_term.lower() in name.lower()}
-        if filtered_options:
-            st.info(f"✓ Found {len(filtered_options)} player(s) matching '{search_term}'")
-        else:
-            st.warning(f"No players found matching '{search_term}'. Try a different search.")
-    else:
-        filtered_options = player_options
-        st.caption(f"💡 {len(filtered_options)} total players available - type above to filter")
-    
-    if not filtered_options:
-        st.error("No players match your search")
-        conn.close()
-        return
-    
-    # If there's a preselected player and it's in filtered list, use it as default
-    if preselected_player_id and preselected_player_id in filtered_options.values():
-        default_player_index = list(filtered_options.values()).index(preselected_player_id)
+    # If there's a preselected player, use it as default
+    if preselected_player_id and preselected_player_id in player_options.values():
+        default_player_index = list(player_options.values()).index(preselected_player_id)
     else:
         default_player_index = 0
     
     selected_player = st.selectbox(
         "👤 Select Player",
-        list(filtered_options.keys()),
+        list(player_options.keys()),
         index=default_player_index,
         key="session_detail_player_selector"
     )
     
-    player_id = filtered_options[selected_player]
+    player_id = player_options[selected_player]
     
     # Step 2: Session selection (filtered by selected player)
     sessions = get_sessions_by_player(conn, player_id)
