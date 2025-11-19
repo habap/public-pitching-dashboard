@@ -1377,9 +1377,10 @@ def main():
                 conn.close()
                 return
             
-            # Create searchable player list
+            # Create alphabetically sorted player list
             player_options = {f"{p['player_name']} ({p['graduation_year']})": p['player_id'] 
                              for p in players}
+            sorted_player_names = sorted(player_options.keys())
             
             # Handle clear button trigger
             if 'clear_upload_search' in st.session_state and st.session_state.clear_upload_search:
@@ -1396,7 +1397,8 @@ def main():
                     "🔍 Search for a player",
                     placeholder="Type name, graduation year, or any text to filter...",
                     key="player_search",
-                    help="Start typing to see matching players below"
+                    help="Start typing to see matching players below",
+                    on_change=lambda: None  # Triggers rerun on each keypress
                 )
             
             with col2:
@@ -1405,17 +1407,18 @@ def main():
                         st.session_state.clear_upload_search = True
                         st.rerun()
             
-            # Filter players based on search
+            # Filter players based on search (alphabetically sorted)
             if search_term:
-                filtered_players = [name for name in player_options.keys() 
-                                   if search_term.lower() in name.lower()]
+                filtered_names = [name for name in sorted_player_names 
+                                 if search_term.lower() in name.lower()]
+                filtered_players = filtered_names
                 # Show match count
                 if filtered_players:
                     st.info(f"✓ Found {len(filtered_players)} player(s) matching '{search_term}'")
                 else:
                     st.warning(f"No players found matching '{search_term}'. Try a different search.")
             else:
-                filtered_players = list(player_options.keys())
+                filtered_players = sorted_player_names
                 st.caption(f"💡 {len(filtered_players)} total players available - type above to filter")
             
             # Show filtered results
