@@ -350,6 +350,13 @@ with col1:
     # Check if we have a pre-selected player
     selected_player_id_from_state = st.session_state.get('selected_player_id')
     
+    # Handle clear button trigger
+    if 'clear_pitch_type_search' in st.session_state and st.session_state.clear_pitch_type_search:
+        if 'pitch_type_player_search' in st.session_state:
+            del st.session_state.pitch_type_player_search
+        st.session_state.clear_pitch_type_search = False
+        st.rerun()
+    
     # Type-ahead search for player
     search_col1, search_col2 = st.columns([4, 1])
     
@@ -362,9 +369,10 @@ with col1:
         )
     
     with search_col2:
-        if search_term and st.button("✖", key="clear_pitch_type_search"):
-            st.session_state.pitch_type_player_search = ""
-            st.rerun()
+        if search_term:
+            if st.button("✖", key="clear_pitch_type_search_button"):
+                st.session_state.clear_pitch_type_search = True
+                st.rerun()
     
     # Filter players based on search
     if search_term:
