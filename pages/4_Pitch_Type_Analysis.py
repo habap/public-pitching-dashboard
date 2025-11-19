@@ -312,7 +312,7 @@ def create_movement_chart(pitches_df):
         return None
     
     # Filter to only pitches with both movement values
-    movement_df = pitches_df.dropna(subset=['horz_break', 'induced_vert_break'])
+    movement_df = pitches_df.dropna(subset=['horizontal_break', 'induced_vertical_break'])
     
     if len(movement_df) == 0:
         return None
@@ -320,11 +320,11 @@ def create_movement_chart(pitches_df):
     # Convert session_date to string for color grouping
     movement_df['session_label'] = movement_df['session_date'].astype(str)
     
-    fig = px.scatter(movement_df, x='horz_break', y='induced_vert_break',
+    fig = px.scatter(movement_df, x='horizontal_break', y='induced_vertical_break',
                      color='session_label',
                      title='Pitch Movement by Session',
-                     labels={'horz_break': 'Horizontal Break (in)', 
-                            'induced_vert_break': 'Induced Vertical Break (in)',
+                     labels={'horizontal_break': 'Horizontal Break (in)', 
+                            'induced_vertical_break': 'Induced Vertical Break (in)',
                             'session_label': 'Session'})
     
     # Add reference lines at 0
@@ -530,12 +530,12 @@ if 'spin_rate' in pitches_df.columns:
             st.metric("Max Spin Rate", f"{spin_data.max():.0f} rpm")
 
 # Movement statistics
-if 'horz_break' in pitches_df.columns and 'induced_vert_break' in pitches_df.columns:
+if 'horizontal_break' in pitches_df.columns and 'induced_vertical_break' in pitches_df.columns:
     st.markdown("#### Movement Statistics")
     col1, col2 = st.columns(2)
     
     with col1:
-        hb_data = pitches_df['horz_break'].dropna()
+        hb_data = pitches_df['horizontal_break'].dropna()
         if len(hb_data) > 0:
             st.write("**Horizontal Break**")
             subcol1, subcol2, subcol3 = st.columns(3)
@@ -547,7 +547,7 @@ if 'horz_break' in pitches_df.columns and 'induced_vert_break' in pitches_df.col
                 st.metric("Max", f"{hb_data.max():.1f} in")
     
     with col2:
-        ivb_data = pitches_df['induced_vert_break'].dropna()
+        ivb_data = pitches_df['induced_vertical_break'].dropna()
         if len(ivb_data) > 0:
             st.write("**Induced Vertical Break**")
             subcol1, subcol2, subcol3 = st.columns(3)
