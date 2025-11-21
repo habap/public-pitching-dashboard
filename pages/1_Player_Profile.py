@@ -91,7 +91,16 @@ def get_player_sessions(conn, player_id):
                  ds.source_id, ds.source_name, c.first_name, c.last_name, c.coach_id
         ORDER BY ts.session_date DESC, ts.session_id DESC
     """, (player_id,))
-    return cursor.fetchall()
+    results = cursor.fetchall()
+    
+    # Convert decimal.Decimal to float for pandas compatibility
+    import decimal
+    for row in results:
+        for key, value in row.items():
+            if isinstance(value, decimal.Decimal):
+                row[key] = float(value)
+    
+    return results
 
 def get_player_pitch_data(conn, player_id, limit=100):
     """Get recent pitch data for a player"""

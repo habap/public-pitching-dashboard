@@ -88,7 +88,16 @@ def get_coach_sessions(conn, coach_id):
         GROUP BY ts.session_id
         ORDER BY ts.session_date DESC
     """, (coach_id,))
-    return cursor.fetchall()
+    results = cursor.fetchall()
+    
+    # Convert any decimal.Decimal to float for pandas compatibility
+    import decimal
+    for row in results:
+        for key, value in row.items():
+            if isinstance(value, decimal.Decimal):
+                row[key] = float(value)
+    
+    return results
 
 def get_coach_players(conn, coach_id):
     """Get all players who have worked with this coach"""
