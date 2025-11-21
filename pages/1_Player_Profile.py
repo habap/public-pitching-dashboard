@@ -95,6 +95,7 @@ def get_player_sessions(conn, player_id):
     
     # Convert decimal.Decimal to float for pandas compatibility
     import decimal
+    from datetime import date, datetime
     for row in results:
         for key, value in row.items():
             if isinstance(value, decimal.Decimal):
@@ -529,6 +530,10 @@ def main():
             # Velocity over time
             if 'release_speed' in df_filtered.columns and df_filtered['release_speed'].notna().any():
                 st.subheader("📈 Velocity Trends")
+                
+                # Convert session_date to datetime for plotting
+                if 'session_date' in df_filtered.columns:
+                    df_filtered['session_date'] = pd.to_datetime(df_filtered['session_date'])
                 
                 if has_pitch_types and selected_types:
                     # Color by pitch type
