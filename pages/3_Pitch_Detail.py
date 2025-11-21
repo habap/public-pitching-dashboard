@@ -148,7 +148,7 @@ def create_combined_polar_chart(pitch):
     # Prepare tooltip information
     velocity_str = f"{pitch.get('release_speed', 'N/A'):.1f} mph" if pitch.get('release_speed') else "N/A"
     horz_break_str = f"{pitch.get('horizontal_break', 'N/A'):.1f} in" if pitch.get('horizontal_break') else "N/A"
-    vert_break_str = f"{pitch.get('induced_vertical_break', 'N/A'):.1f} in" if pitch.get('induced_vertical_break') else "N/A"
+    vert_break_str = f"{pitch.get('vertical_break', 'N/A'):.1f} in" if pitch.get('vertical_break') else "N/A"
     
     # Add arm slot line (if available)
     if pitch.get('arm_slot') is not None:
@@ -648,14 +648,14 @@ def main():
             st.metric("Vertical Break", "N/A")
     
     # Movement visualization
-    if pitch['horizontal_break'] is not None and pitch['induced_vertical_break'] is not None:
+    if pitch['horizontal_break'] is not None and pitch['vertical_break'] is not None:
         st.subheader("Movement Plot (Catcher's View)")
         fig = go.Figure()
         
         # Add the pitch as a point
         fig.add_trace(go.Scatter(
             x=[pitch['horizontal_break']],
-            y=[pitch['induced_vertical_break']],
+            y=[pitch['vertical_break']],
             mode='markers',
             marker=dict(size=20, color='red', symbol='circle'),
             name='This Pitch',
@@ -668,13 +668,13 @@ def main():
         
         fig.update_layout(
             xaxis_title="Horizontal Break (inches)",
-            yaxis_title="Induced Vertical Break (inches)",
+            yaxis_title="Vertical Break (inches)",
             height=500,
             showlegend=True
         )
         
         # Set axis ranges for better visualization
-        max_val = max(abs(pitch['horizontal_break']), abs(pitch['induced_vertical_break'])) + 5
+        max_val = max(abs(pitch['horizontal_break']), abs(pitch['vertical_break'])) + 5
         fig.update_xaxes(range=[-max_val, max_val])
         fig.update_yaxes(range=[-max_val, max_val])
         
