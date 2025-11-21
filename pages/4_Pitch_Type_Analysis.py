@@ -163,7 +163,7 @@ def create_combined_polar_chart(pitches_df, throws_hand):
                 
                 velocity_str = f"{pitch.get('release_speed', 'N/A'):.1f} mph" if pd.notna(pitch.get('release_speed')) else "N/A"
                 horz_break_str = f"{pitch.get('horizontal_break', 'N/A'):.1f} in" if pd.notna(pitch.get('horizontal_break')) else "N/A"
-                vert_break_str = f"{pitch.get('induced_vertical_break', 'N/A'):.1f} in" if pd.notna(pitch.get('induced_vertical_break')) else "N/A"
+                vert_break_str = f"{pitch.get('vertical_break', 'N/A'):.1f} in" if pd.notna(pitch.get('vertical_break')) else "N/A"
                 
                 hover_text = (
                     f"<b>Arm Slot: {arm_time_str}</b><br>"
