@@ -191,41 +191,91 @@ def create_combined_polar_chart(pitches_df, selected_pitch_types, throws_hand):
         theta=theta,
         mode='lines',
         line=dict(color='lightgray', width=2),
-        showlegend=False,
+        showlegend=False,    
         hoverinfo='skip'
     ))
-    
-    # Plot arm slots (blue)
-    arm_slots = pitches_df[pitches_df['arm_slot'].notna()]['arm_slot'].astype(float).tolist()
-    if arm_slots:
-        fig.add_trace(go.Scatterpolar(
-            r=[0.9] * len(arm_slots),
-            theta=arm_slots,
-            mode='markers',
-            marker=dict(size=8, color='blue', opacity=0.6),
-            name='Arm Slot',
-            showlegend=True
-        ))
-    
-    # Plot spin directions (red)
-    spin_axes = pitches_df[pitches_df['spin_axis'].notna()]['spin_axis'].astype(float).tolist()
-    if spin_axes:
-        fig.add_trace(go.Scatterpolar(
-            r=[1.0] * len(spin_axes),
-            theta=spin_axes,
-            mode='markers',
-            marker=dict(size=8, color='red', opacity=0.6),
-            name='Spin Direction',
-            showlegend=True
-        ))
-    
+
     # Determine arm side and glove side labels based on throwing hand
     if throws_hand == 'R':
-        arm_side = "9:00 (Arm Side)"
-        glove_side = "3:00 (Glove Side)"
+        # Right-handed pitcher: arm on third base side (3:00), glove on first base side (9:00)
+        right_side_label = "3:00 (Arm Side)"
+        left_side_label = "9:00 (Glove Side)"
     else:
-        arm_side = "3:00 (Arm Side)"
-        glove_side = "9:00 (Glove Side)"
+        # Left-handed pitcher: arm on first base side (9:00), glove on third base side (3:00)
+        left_side_label = "9:00 (Arm Side)"
+        right_side_label = "3:00 (Glove Side)"
+    
+    # Plot arm slots (blue) with enhanced hover
+    if 'arm_slot' in pitches_df.columns:
+        arm_slot_data = pitches_df[pitches_df['arm_slot'].notna()].copy()
+        if len(arm_slot_data) > 0:
+            # Prepare hover text for each pitch
+            hover_texts = []
+            for _, pitch in arm_slot_data.iterrows():
+                arm_angle = float(pitch['arm_slot'])
+                arm_hours = int(arm_angle / 30)
+                arm_minutes = int((arm_angle % 30) * 2)
+                arm_time_str = f"{arm_hours}:{arm_minutes:02d}"
+                
+                velocity_str = f"{pitch.get('release_speed', 'N/A'):.1f} mph" if pd.notna(pitch.get('release_speed')) else "N/A"
+                horz_break_str = f"{pitch.get('horizontal_break', 'N/A'):.1f} in" if pd.notna(pitch.get('horizontal_break')) else "N/A"
+                vert_break_str = f"{pitch.get('induced_vertical_break', 'N/A'):.1f} in" if pd.notna(pitch.get('induced_vertical_break')) else "N/A"
+                
+                hover_text = (
+                    f"<b>Arm Slot: {arm_time_str}</b><br>"
+                    f"Angle: {arm_angle:.0f}°<br>"
+                    f"Velocity: {velocity_str}<br>"
+                    f"H Break: {horz_break_str}<br>"
+                    f"V Break: {vert_break_str}"
+                )
+                hover_texts.append(hover_text)
+            
+            fig.add_trace(go.Scatterpolar(
+                r=[0.9] * len(arm_slot_data),
+                theta=arm_slot_data['arm_slot'].astype(float).tolist(),
+                mode='markers',
+                marker=dict(size=8, color='blue', opacity=0.6),
+                name='Arm Slot',
+                showlegend=True,
+                hovertemplate='%{hovertext}<extra></extra>',
+                hovertext=hover_texts
+            ))
+    
+    # Plot spin directions (red) with enhanced hover
+    if 'spin_axis' in pitches_df.columns:
+        spin_data = pitches_df[pitches_df['spin_axis'].notna()].copy()
+        if len(spin_data) > 0:
+            # Prepare hover text for each pitch
+            hover_texts = []
+            for _, pitch in spin_data.iterrows():
+                spin_angle = float(pitch['spin_axis'])
+                spin_hours = int(spin_angle / 30)
+                spin_minutes = int((spin_angle % 30) * 2)
+                spin_time_str = f"{spin_hours}:{spin_minutes:02d}"
+                
+                velocity_str = f"{pitch.get('release_speed', 'N/A'):.1f} mph" if pd.notna(pitch.get('release_speed')) else "N/A"
+                horz_break_str = f"{pitch.get('horizontal_break', 'N/A'):.1f} in" if pd.notna(pitch.get('horizontal_break')) else "N/A"
+                vert_break_str = f"{pitch.get('induced_vertical_break', 'N/A'):.1f} in" if pd.notna(pitch.get('induced_vertical_break')) else "N/A"
+                
+                hover_text = (
+                    f"<b>Spin Direction: {spin_time_str}</b><br>"
+                    f"Angle: {spin_angle:.0f}°<br>"
+                    f"Velocity: {velocity_str}<br>"
+                    f"H Break: {horz_break_str}<br>"
+                    f"V Break: {vert_break_str}"
+                )
+                hover_texts.append(hover_text)
+            
+            fig.add_trace(go.Scatterpolar(
+                r=[1.0] * len(spin_data),
+                theta=spin_data['spin_axis'].astype(float).tolist(),
+                mode='markers',
+                marker=dict(size=8, color='red', opacity=0.6),
+                name='Spin Direction',
+                showlegend=True,
+                hovertemplate='%{hovertext}<extra></extra>',
+                hovertext=hover_texts
+            ))
     
     fig.update_layout(
         polar=dict(
@@ -233,7 +283,7 @@ def create_combined_polar_chart(pitches_df, selected_pitch_types, throws_hand):
             angularaxis=dict(
                 direction='clockwise',
                 rotation=90,
-                ticktext=['12:00 (OTT)', glove_side, '6:00 (Sub)', arm_side],
+                ticktext=['12:00 (OTT)', right_side_label, '6:00 (Sub)', left_side_label],
                 tickvals=[0, 90, 180, 270]
             )
         ),

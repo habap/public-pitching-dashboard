@@ -133,22 +133,94 @@ def create_combined_polar_chart(pitch):
     # Determine arm side and glove side labels based on throwing hand
     if pitch.get('throws_hand'):
         if pitch['throws_hand'] == 'R':
-            arm_side = "9:00 (Arm Side)"
-            glove_side = "3:00 (Glove Side)"
+            # Right-handed pitcher: arm on third base side (3:00), glove on first base side (9:00)
+            right_side_label = "3:00 (Arm Side)"
+            left_side_label = "9:00 (Glove Side)"
         else:
-            arm_side = "3:00 (Arm Side)"
-            glove_side = "9:00 (Glove Side)"
+            # Left-handed pitcher: arm on first base side (9:00), glove on third base side (3:00)
+            right_side_label = "3:00 (Glove Side)"
+            left_side_label = "9:00 (Arm Side)"
     else:
-        arm_side = "9:00"
-        glove_side = "3:00"
+        # Default labels if handedness unknown
+        right_side_label = "3:00"
+        left_side_label = "9:00"
     
+    # Prepare tooltip information
+    velocity_str = f"{pitch.get('release_speed', 'N/A'):.1f} mph" if pitch.get('release_speed') else "N/A"
+    horz_break_str = f"{pitch.get('horizontal_break', 'N/A'):.1f} in" if pitch.get('horizontal_break') else "N/A"
+    vert_break_str = f"{pitch.get('induced_vertical_break', 'N/A'):.1f} in" if pitch.get('induced_vertical_break') else "N/A"
+    
+    # Add arm slot line (if available)
+    if pitch.get('arm_slot') is not None:
+        arm_angle = float(pitch['arm_slot'])
+        
+        # Convert angle to time format
+        arm_hours = int(arm_angle / 30)
+        arm_minutes = int((arm_angle % 30) * 2)
+        arm_time_str = f"{arm_hours}:{arm_minutes:02d}"
+        
+        # Create custom hover text
+        arm_hover_text = (
+            f"<b>Arm Slot</b><br>"
+            f"Time: {arm_time_str}<br>"
+            f"Angle: {arm_angle:.0f}°<br>"
+            f"<br>"
+            f"<b>Pitch Metrics</b><br>"
+            f"Velocity: {velocity_str}<br>"
+            f"H Break: {horz_break_str}<br>"
+            f"V Break: {vert_break_str}"
+        )
+        
+        fig.add_trace(go.Scatterpolar(
+            r=[0, 1],
+            theta=[arm_angle, arm_angle],
+            mode='lines+markers',
+            line=dict(color='blue', width=4),
+            marker=dict(size=[0, 12], color='blue'),
+            name='Arm Slot',
+            showlegend=True,
+            hovertemplate=arm_hover_text + "<extra></extra>"
+        ))
+    
+    # Add spin direction line (if available)
+    if pitch.get('spin_axis') is not None:
+        spin_angle = float(pitch['spin_axis'])
+        
+        # Convert angle to time format
+        spin_hours = int(spin_angle / 30)
+        spin_minutes = int((spin_angle % 30) * 2)
+        spin_time_str = f"{spin_hours}:{spin_minutes:02d}"
+        
+        # Create custom hover text
+        spin_hover_text = (
+            f"<b>Spin Direction</b><br>"
+            f"Time: {spin_time_str}<br>"
+            f"Angle: {spin_angle:.0f}°<br>"
+            f"<br>"
+            f"<b>Pitch Metrics</b><br>"
+            f"Velocity: {velocity_str}<br>"
+            f"H Break: {horz_break_str}<br>"
+            f"V Break: {vert_break_str}"
+        )
+        
+        fig.add_trace(go.Scatterpolar(
+            r=[0, 1],
+            theta=[spin_angle, spin_angle],
+            mode='lines+markers',
+            line=dict(color='red', width=4),
+            marker=dict(size=[0, 12], color='red'),
+            name='Spin Direction',
+            showlegend=True,
+            hovertemplate=spin_hover_text + "<extra></extra>"
+        ))
+
     fig.update_layout(
         polar=dict(
             radialaxis=dict(visible=False, range=[0, 1]),
             angularaxis=dict(
                 direction='clockwise',
                 rotation=90,
-                ticktext=['12:00 (OTT)', glove_side, '6:00 (Sub)', arm_side],
+                ticktext=['12:00 (OTT)', left_side_label, '6:00 (Sub)', right_side_label],
                 tickvals=[0, 90, 180, 270]
             )
         ),
