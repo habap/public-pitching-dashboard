@@ -521,7 +521,7 @@ def main():
     if pitch['spin_axis'] or pitch.get('arm_slot'):
         st.subheader("Release Mechanics")
         fig = create_combined_polar_chart(pitch)
-        st.plotly_chart(fig, width='strech')
+        st.plotly_chart(fig, width='stretch')
         
         # Add descriptive text
         descriptions = []
@@ -606,7 +606,7 @@ def main():
         fig.update_xaxes(range=[-max_val, max_val])
         fig.update_yaxes(range=[-max_val, max_val])
         
-        st.plotly_chart(fig, width='strech')
+        st.plotly_chart(fig, width='stretch')
     
     st.divider()
     
@@ -711,7 +711,7 @@ def main():
                 fig.update_xaxes(range=[-2, 2])
                 fig.update_yaxes(range=[0, 5])
                 
-                st.plotly_chart(fig, width='strech')
+                st.plotly_chart(fig, width='stretch')
         
         with col2:
             st.metric("Plate X", f"{pitch['plate_location_x']:.2f}'" if pitch['plate_location_x'] else "N/A",
