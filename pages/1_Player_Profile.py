@@ -766,7 +766,7 @@ def main():
                         fig = px.scatter(df_movement, x='horizontal_break', y='vertical_break',
                                        title='Pitch Movement Profile',
                                        labels={'horizontal_break': 'Horizontal Break (in)', 
-                                              'vertical_break': 'Induced Vertical Break (in)'},
+                                              'vertical_break': 'Vertical Break (in)'},
                                        opacity=0.6)
                     
                     # Add reference lines

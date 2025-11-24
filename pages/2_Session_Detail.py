@@ -726,7 +726,32 @@ def main():
                     
                     fig.add_hline(y=0, line_dash="dash", line_color="gray")
                     fig.add_vline(x=0, line_dash="dash", line_color="gray")
-                    st.plotly_chart(fig, width='stretch')
+                    
+                    # Find the max absolute value across both axes for symmetric range
+                    max_break = max(
+                        abs(df_movement['horizontal_break'].min()),
+                        abs(df_movement['horizontal_break'].max()),
+                        abs(df_movement['vertical_break'].min()),
+                        abs(df_movement['vertical_break'].max())
+                    )
+                    
+                    # Round up to nearest 5 for cleaner axis labels
+                    max_range = ((max_break // 5) + 1) * 5
+                    
+                    # Force equal aspect ratio (1 inch = 1 inch on screen)
+                    fig.update_xaxes(range=[-max_range, max_range])
+                    fig.update_yaxes(
+                        range=[-max_range, max_range],
+                        scaleanchor="x",
+                        scaleratio=1
+                    )
+                    
+                    # Make plot dimensions more square for better visualization
+                    fig.update_layout(
+                        width=700,
+                        height=700
+                    )
+                    st.plotly_chart(fig, use_container_width=False)
         else:
             st.info("No pitch data available for analytics")
     
