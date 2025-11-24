@@ -549,9 +549,9 @@ throws_hand = pitches_df['throws_hand'].iloc[0] if 'throws_hand' in pitches_df.c
 player_name = selected_player_name.split(', ')
 st.markdown(f"## {player_name[1]} {player_name[0]}")
 st.markdown(f"### {selected_pitch_type} Analysis")
-if st.button(f"← Back to {player_name[1]} {player_name[0}'s Profile", key="back_to_player"):
-    st.session_state['selected_player_id'] = selected_player_id
-    st.switch_page("pages/1_Player_Profile.py")
+#if st.button(f"← Back to {player_name[1]} {player_name[0}'s Profile", key="back_to_player"):
+#    st.session_state['selected_player_id'] = selected_player_id
+#    st.switch_page("pages/1_Player_Profile.py")
 
 
 # Summary statistics
