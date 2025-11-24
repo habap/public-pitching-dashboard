@@ -703,17 +703,22 @@ def main():
                 # Velocity stats by pitch type
                 if has_pitch_types and selected_types:
                     st.subheader("Velocity by Pitch Type")
+                    st.caption("Click on a pitch type to view detailed analysis")
                     
                     cols = st.columns(min(len(selected_types), 4))
                     for idx, pitch_type in enumerate(selected_types):
                         pt_data = df_filtered[df_filtered['pitch_type'] == pitch_type]['release_speed']
                         if len(pt_data) > 0:
                             with cols[idx % len(cols)]:
-                                st.metric(
-                                    f"{pitch_type}",
-                                    f"{pt_data.mean():.1f} mph",
-                                    f"Max: {pt_data.max():.1f}"
-                                )
+                                # Use a container with button for clickability
+                                if st.button(
+                                    f"**{pitch_type}**\n\nAvg: {pt_data.mean():.1f} mph\nMax: {pt_data.max():.1f} mph",
+                                    key=f"velo_pt_{pitch_type}",
+                                    use_container_width=True
+                                ):
+                                    st.session_state['selected_player_id'] = player_id
+                                    st.session_state['selected_pitch_type'] = pitch_type
+                                    st.switch_page("pages/4_Pitch_Type_Analysis.py")
                 else:
                     # Overall velocity stats
                     col1, col2 = st.columns(2)
