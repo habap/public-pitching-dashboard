@@ -161,6 +161,50 @@ def get_player_locations(conn, player_id):
     """, (player_id,))
     return cursor.fetchall()
 
+def update_player_info(conn, player_id, graduation_year=None, throws_hand=None, 
+                       bats_hand=None, email=None, phone=None, parent_email=None):
+    """Update player information"""
+    try:
+        cursor = conn.cursor()
+        updates = []
+        values = []
+        
+        if graduation_year is not None:
+            updates.append("graduation_year = %s")
+            values.append(graduation_year if graduation_year else None)
+        
+        if throws_hand is not None:
+            updates.append("throws_hand = %s")
+            values.append(throws_hand if throws_hand else None)
+        
+        if bats_hand is not None:
+            updates.append("bats_hand = %s")
+            values.append(bats_hand if bats_hand else None)
+        
+        if email is not None:
+            updates.append("email = %s")
+            values.append(email if email else None)
+        
+        if phone is not None:
+            updates.append("phone = %s")
+            values.append(phone if phone else None)
+        
+        if parent_email is not None:
+            updates.append("parent_email = %s")
+            values.append(parent_email if parent_email else None)
+        
+        if updates:
+            values.append(player_id)
+            query = f"UPDATE players SET {', '.join(updates)} WHERE player_id = %s"
+            cursor.execute(query, values)
+            conn.commit()
+            return True
+        return False
+    except Error as e:
+        st.error(f"Error updating player info: {e}")
+        conn.rollback()
+        return False
+
 def get_pitch_type_summary(conn, session_id):
     """Get pitch type breakdown for a session with movement stats"""
     cursor = conn.cursor(dictionary=True)
@@ -294,34 +338,139 @@ def main():
     
     # Player Header
     st.markdown("---")
-    col1, col2, col3, col4 = st.columns(4)
     
-    with col1:
-        st.metric("Name", f"{player['first_name']} {player['last_name']}")
-        st.metric("Throws", player['throws_hand'] or "Unknown")
+    # Add edit mode toggle at the top
+    edit_mode = st.toggle("✏️ Edit Player Info", key="edit_mode")
     
-    with col2:
-        st.metric("Graduation Year", player['graduation_year'] or "N/A")
-        st.metric("Bats", player['bats_hand'] or "Unknown")
+    if edit_mode:
+        st.info("📝 Make changes below and click 'Save Changes' when done")
+        
+        # Create a form for editing
+        with st.form("edit_player_form"):
+            st.subheader(f"Editing: {player['first_name']} {player['last_name']}")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("### Player Details")
+                grad_year = st.number_input(
+                    "Graduation Year",
+                    min_value=2020,
+                    max_value=2040,
+                    value=int(player['graduation_year']) if player.get('graduation_year') else 2025,
+                    step=1
+                )
+                
+                throws_options = ['', 'R', 'L']
+                throws_index = throws_options.index(player.get('throws_hand', '') or '') if (player.get('throws_hand', '') or '') in throws_options else 0
+                throws = st.selectbox(
+                    "Throws",
+                    options=throws_options,
+                    index=throws_index,
+                    format_func=lambda x: 'Not Set' if x == '' else ('Right' if x == 'R' else 'Left')
+                )
+                
+                bats_options = ['', 'R', 'L', 'S']
+                bats_index = bats_options.index(player.get('bats_hand', '') or '') if (player.get('bats_hand', '') or '') in bats_options else 0
+                bats = st.selectbox(
+                    "Bats",
+                    options=bats_options,
+                    index=bats_index,
+                    format_func=lambda x: 'Not Set' if x == '' else ('Right' if x == 'R' else ('Left' if x == 'L' else 'Switch'))
+                )
+            
+            with col2:
+                st.markdown("### Contact Information")
+                player_email = st.text_input(
+                    "Player Email",
+                    value=player.get('email', '') or ''
+                )
+                
+                player_phone = st.text_input(
+                    "Player Phone",
+                    value=player.get('phone', '') or '',
+                    placeholder="(123) 456-7890"
+                )
+                
+                parent_email = st.text_input(
+                    "Parent Email",
+                    value=player.get('parent_email', '') or ''
+                )
+            
+            # Submit button
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                submitted = st.form_submit_button("💾 Save Changes", use_container_width=True, type="primary")
+            
+            if submitted:
+                # Update the database
+                success = update_player_info(
+                    conn,
+                    player_id,
+                    graduation_year=grad_year,
+                    throws_hand=throws if throws else None,
+                    bats_hand=bats if bats else None,
+                    email=player_email if player_email else None,
+                    phone=player_phone if player_phone else None,
+                    parent_email=parent_email if parent_email else None
+                )
+                
+                if success:
+                    st.success("✅ Player information updated successfully!")
+                    st.rerun()
+                else:
+                    st.error("Failed to update player information")
+        
+        st.markdown("---")
+        
+        # Show non-editable stats
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("Total Sessions", player['total_sessions'])
+        
+        with col2:
+            st.metric("Total Pitches", player['total_pitches'])
+        
+        with col3:
+            if player['first_session']:
+                st.metric("First Session", player['first_session'].strftime('%m/%d/%Y'))
+        
+        with col4:
+            if player['last_session']:
+                st.metric("Last Session", player['last_session'].strftime('%m/%d/%Y'))
     
-    with col3:
-        st.metric("Total Sessions", player['total_sessions'])
-        st.metric("Total Pitches", player['total_pitches'])
+    else:
+        # Display mode (original metrics layout)
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("Name", f"{player['first_name']} {player['last_name']}")
+            st.metric("Throws", player['throws_hand'] or "Unknown")
+        
+        with col2:
+            st.metric("Graduation Year", player['graduation_year'] or "N/A")
+            st.metric("Bats", player['bats_hand'] or "Unknown")
+        
+        with col3:
+            st.metric("Total Sessions", player['total_sessions'])
+            st.metric("Total Pitches", player['total_pitches'])
+        
+        with col4:
+            if player['first_session']:
+                st.metric("First Session", player['first_session'].strftime('%m/%d/%Y'))
+            if player['last_session']:
+                st.metric("Last Session", player['last_session'].strftime('%m/%d/%Y'))
+        
+        # Contact Information
+        with st.expander("📧 Contact Information"):
+            if player.get('email'):
+                st.write(f"**Email:** {player['email']}")
+            if player.get('phone'):
+                st.write(f"**Phone:** {player['phone']}")
+            if player.get('parent_email'):
+                st.write(f"**Parent Email:** {player['parent_email']}")
     
-    with col4:
-        if player['first_session']:
-            st.metric("First Session", player['first_session'].strftime('%m/%d/%Y'))
-        if player['last_session']:
-            st.metric("Last Session", player['last_session'].strftime('%m/%d/%Y'))
-    
-    # Contact Information
-    with st.expander("📧 Contact Information"):
-        if player.get('email'):
-            st.write(f"**Email:** {player['email']}")
-        if player.get('phone'):
-            st.write(f"**Phone:** {player['phone']}")
-        if player.get('parent_email'):
-            st.write(f"**Parent Email:** {player['parent_email']}")
     
     # Tabs for different views
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["📅 Sessions", "⚾ Pitches", "👨‍🏫 Coaches", "📍 Locations", "📊 Analytics"])
