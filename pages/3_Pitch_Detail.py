@@ -634,11 +634,11 @@ def main():
             st.metric("Horizontal Break", "N/A")
     
     with col2:
-        if pitch['induced_vertical_break']:
-            st.metric("Induced Vertical Break", f"{pitch['induced_vertical_break']:.1f}\"",
+        if pitch['vertical_break']:
+            st.metric("Vertical Break", f"{pitch['vertical_break']:.1f}\"",
                      help="Vertical movement relative to gravity")
         else:
-            st.metric("Induced Vertical Break", "N/A")
+            st.metric("Vertical Break", "N/A")
     
     with col3:
         if pitch['vertical_break']:
