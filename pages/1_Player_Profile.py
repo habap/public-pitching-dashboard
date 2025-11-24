@@ -759,7 +759,7 @@ def main():
                                        color='pitch_type',
                                        title='Pitch Movement Profile by Pitch Type',
                                        labels={'horizontal_break': 'Horizontal Break (in)', 
-                                              'vertical_break': 'Induced Vertical Break (in)',
+                                              'vertical_break': 'Vertical Break (in)',
                                               'pitch_type': 'Pitch Type'},
                                        opacity=0.6)
                     else:
