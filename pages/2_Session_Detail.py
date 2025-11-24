@@ -152,9 +152,9 @@ def get_pitch_type_summary(conn, session_id):
                AVG(horizontal_break) as avg_h_break,
                MIN(horizontal_break) as min_h_break,
                MAX(horizontal_break) as max_h_break,
-               AVG(induced_vertical_break) as avg_v_break,
-               MIN(induced_vertical_break) as min_v_break,
-               MAX(induced_vertical_break) as max_v_break,
+               AVG(vertical_break) as avg_v_break,
+               MIN(vertical_break) as min_v_break,
+               MAX(vertical_break) as max_v_break,
                AVG(spin_rate) as avg_spin
         FROM pitch_data
         WHERE session_id = %s AND pitch_type IS NOT NULL
@@ -325,6 +325,7 @@ def create_spin_rate_chart(pitches_df, selected_pitch_types):
     
     fig.update_layout(height=400)
     return fig
+
 
 def main():
     st.title("📋 Session Detail")
@@ -509,8 +510,8 @@ def main():
                         movement = []
                         if pitch['horizontal_break']:
                             movement.append(f"H: {pitch['horizontal_break']:.1f}\"")
-                        if pitch['induced_vertical_break']:
-                            movement.append(f"V: {pitch['induced_vertical_break']:.1f}\"")
+                        if pitch['vertical_break']:
+                            movement.append(f"V: {pitch['vertical_break']:.1f}\"")
                         if pitch['release_height']:
                             movement.append(f"Height: {pitch['release_height']:.2f}'")
                         st.write(" | ".join(movement) if movement else "No movement data")
@@ -536,7 +537,7 @@ def main():
                     'Spin Rate': f"{pitch['spin_rate']:.0f}" if pitch['spin_rate'] else 'N/A',
                     'Spin Axis': f"{pitch['spin_axis']:.0f}°" if pitch['spin_axis'] else 'N/A',
                     'H Break': f"{pitch['horizontal_break']:.1f}\"" if pitch['horizontal_break'] else 'N/A',
-                    'V Break': f"{pitch['induced_vertical_break']:.1f}\"" if pitch['induced_vertical_break'] else 'N/A',
+                    'V Break': f"{pitch['vertical_break']:.1f}\"" if pitch['vertical_break'] else 'N/A',
                     'Release Height': f"{pitch['release_height']:.2f}'" if pitch['release_height'] else 'N/A',
                     'Extension': f"{pitch['release_extension']:.2f}'" if pitch['release_extension'] else 'N/A',
                     'Release Side': f"{pitch['release_side']:.2f}'" if pitch['release_side'] else 'N/A',
@@ -683,8 +684,8 @@ def main():
                 st.plotly_chart(fig, width='stretch')
             
             # Movement analysis
-            if 'horizontal_break' in df.columns and 'induced_vertical_break' in df.columns:
-                df_movement = df[df['horizontal_break'].notna() & df['induced_vertical_break'].notna()]
+            if 'horizontal_break' in df.columns and 'vertical_break' in df.columns:
+                df_movement = df[df['horizontal_break'].notna() & df['vertical_break'].notna()]
                 if len(df_movement) > 0:
                     st.subheader("⚾ Movement Analysis")
                     
@@ -699,27 +700,27 @@ def main():
                         st.metric("Range", f"{df_movement['horizontal_break'].min():.2f}\" to {df_movement['horizontal_break'].max():.2f}\"")
                     
                     with col2:
-                        st.write("**Induced Vertical Break**")
-                        st.metric("Average", f"{df_movement['induced_vertical_break'].mean():.2f}\"")
-                        st.metric("Range", f"{df_movement['induced_vertical_break'].min():.2f}\" to {df_movement['induced_vertical_break'].max():.2f}\"")
+                        st.write("**Vertical Break**")
+                        st.metric("Average", f"{df_movement['vertical_break'].mean():.2f}\"")
+                        st.metric("Range", f"{df_movement['vertical_break'].min():.2f}\" to {df_movement['vertical_break'].max():.2f}\"")
                     
                     # Movement chart
                     st.subheader("Pitch Movement Profile")
                     
                     if has_pitch_types:
-                        fig = px.scatter(df_movement, x='horizontal_break', y='induced_vertical_break',
+                        fig = px.scatter(df_movement, x='horizontal_break', y='vertical_break',
                                        color='pitch_type',
                                        title='Movement Chart by Pitch Type',
                                        labels={'horizontal_break': 'Horizontal Break (in)', 
-                                              'induced_vertical_break': 'Induced Vertical Break (in)',
+                                              'vertical_break': 'Vertical Break (in)',
                                               'pitch_type': 'Pitch Type'},
                                        hover_data=['pitch_number', 'release_speed'],
                                        opacity=0.7)
                     else:
-                        fig = px.scatter(df_movement, x='horizontal_break', y='induced_vertical_break',
+                        fig = px.scatter(df_movement, x='horizontal_break', y='vertical_break',
                                        title='Movement Chart',
                                        labels={'horizontal_break': 'Horizontal Break (in)', 
-                                              'induced_vertical_break': 'Induced Vertical Break (in)'},
+                                              'vertical_break': 'Vertical Break (in)'},
                                        hover_data=['pitch_number', 'release_speed'],
                                        opacity=0.7)
                     

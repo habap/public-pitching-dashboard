@@ -217,9 +217,9 @@ def get_pitch_type_summary(conn, session_id):
                AVG(horizontal_break) as avg_h_break,
                MIN(horizontal_break) as min_h_break,
                MAX(horizontal_break) as max_h_break,
-               AVG(induced_vertical_break) as avg_v_break,
-               MIN(induced_vertical_break) as min_v_break,
-               MAX(induced_vertical_break) as max_v_break,
+               AVG(vertical_break) as avg_v_break,
+               MIN(vertical_break) as min_v_break,
+               MAX(vertical_break) as max_v_break,
                AVG(spin_rate) as avg_spin
         FROM pitch_data
         WHERE session_id = %s AND pitch_type IS NOT NULL
@@ -549,7 +549,7 @@ def main():
                     'Spin Rate': f"{pitch['spin_rate']:.0f}" if pitch['spin_rate'] else 'N/A',
                     'Spin Axis': f"{pitch['spin_axis']:.0f}°" if pitch['spin_axis'] else 'N/A',
                     'H Break': f"{pitch['horizontal_break']:.1f}" if pitch['horizontal_break'] else 'N/A',
-                    'V Break': f"{pitch['induced_vertical_break']:.1f}" if pitch['induced_vertical_break'] else 'N/A',
+                    'V Break': f"{pitch['vertical_break']:.1f}" if pitch['vertical_break'] else 'N/A',
                     'Release Height': f"{pitch['release_height']:.2f}" if pitch['release_height'] else 'N/A',
                     'Extension': f"{pitch['release_extension']:.2f}" if pitch['release_extension'] else 'N/A',
                 })
@@ -749,24 +749,24 @@ def main():
                 st.plotly_chart(fig, width='stretch')
             
             # Movement plot
-            if 'horizontal_break' in df_filtered.columns and 'induced_vertical_break' in df_filtered.columns:
-                df_movement = df_filtered[df_filtered['horizontal_break'].notna() & df_filtered['induced_vertical_break'].notna()]
+            if 'horizontal_break' in df_filtered.columns and 'vertical_break' in df_filtered.columns:
+                df_movement = df_filtered[df_filtered['horizontal_break'].notna() & df_filtered['vertical_break'].notna()]
                 if len(df_movement) > 0:
                     st.subheader("⚾ Pitch Movement")
                     
                     if has_pitch_types and selected_types:
-                        fig = px.scatter(df_movement, x='horizontal_break', y='induced_vertical_break',
+                        fig = px.scatter(df_movement, x='horizontal_break', y='vertical_break',
                                        color='pitch_type',
                                        title='Pitch Movement Profile by Pitch Type',
                                        labels={'horizontal_break': 'Horizontal Break (in)', 
-                                              'induced_vertical_break': 'Induced Vertical Break (in)',
+                                              'vertical_break': 'Induced Vertical Break (in)',
                                               'pitch_type': 'Pitch Type'},
                                        opacity=0.6)
                     else:
-                        fig = px.scatter(df_movement, x='horizontal_break', y='induced_vertical_break',
+                        fig = px.scatter(df_movement, x='horizontal_break', y='vertical_break',
                                        title='Pitch Movement Profile',
                                        labels={'horizontal_break': 'Horizontal Break (in)', 
-                                              'induced_vertical_break': 'Induced Vertical Break (in)'},
+                                              'vertical_break': 'Induced Vertical Break (in)'},
                                        opacity=0.6) 
                     fig.add_hline(y=0, line_dash="dash", line_color="gray")
                     fig.add_vline(x=0, line_dash="dash", line_color="gray")
