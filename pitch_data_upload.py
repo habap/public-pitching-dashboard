@@ -1557,8 +1557,8 @@ def main():
                     summary_data.append({
                         'Player': pitcher_name,
                         'Pitches Uploaded': info['pitches'],
-                        'Session ID': info['session_id'],
-                        'Player ID': info['player_id']
+                        'Session ID': info.get('session_id', 'N/A'),
+                        'Player ID': info.get('player_id', 'N/A')
                     })
                 summary_df = pd.DataFrame(summary_data)
                 st.dataframe(summary_df, width=True)
