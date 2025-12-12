@@ -1,0 +1,247 @@
+/* Modern Dashboard Styling - Matching HTML Design */
+
+/* Main app styling */
+[data-testid="stAppViewContainer"] {
+    background: #f5f5f5;
+}
+
+/* Header styling */
+[data-testid="stHeader"] {
+    background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+    color: white;
+}
+
+/* Sidebar styling */
+[data-testid="stSidebar"] {
+    background: white;
+    border-right: 1px solid #e5e7eb;
+}
+
+/* Card styling for containers */
+.element-container [data-testid="stVerticalBlock"] > [data-testid="stVerticalBlock"] {
+    background: white;
+    border-radius: 8px;
+    padding: 1.5rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    margin-bottom: 1.5rem;
+}
+
+/* Headers */
+h1 {
+    color: #1e3a8a !important;
+    font-size: 1.75rem !important;
+    font-weight: 600 !important;
+    margin-bottom: 1rem !important;
+}
+
+h2 {
+    color: #1e3a8a !important;
+    font-size: 1.25rem !important;
+    font-weight: 600 !important;
+    margin-bottom: 1rem !important;
+}
+
+h3 {
+    color: #374151 !important;
+    font-size: 1rem !important;
+    font-weight: 500 !important;
+    margin-bottom: 0.75rem !important;
+}
+
+/* Metric styling */
+[data-testid="stMetric"] {
+    background: #f9fafb;
+    padding: 1rem;
+    border-radius: 6px;
+    border-left: 3px solid #3b82f6;
+}
+
+[data-testid="stMetricLabel"] {
+    font-size: 0.75rem;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+[data-testid="stMetricValue"] {
+    font-size: 1.75rem;
+    font-weight: bold;
+    color: #1e3a8a;
+}
+
+/* Buttons */
+.stButton > button {
+    border-radius: 6px;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.stButton > button[kind="primary"] {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    border: none;
+    color: white;
+}
+
+.stButton > button[kind="primary"]:hover {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    box-shadow: 0 4px 6px rgba(59, 130, 246, 0.3);
+}
+
+.stButton > button[kind="secondary"] {
+    background: white;
+    border: 1px solid #e5e7eb;
+    color: #374151;
+}
+
+.stButton > button[kind="secondary"]:hover {
+    background: #f9fafb;
+    border-color: #3b82f6;
+}
+
+/* Tabs */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 0.5rem;
+    border-bottom: 2px solid #e5e7eb;
+}
+
+.stTabs [data-baseweb="tab"] {
+    padding: 0.75rem 1.5rem;
+    background: none;
+    border: none;
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: #6b7280;
+    border-bottom: 3px solid transparent;
+}
+
+.stTabs [data-baseweb="tab"]:hover {
+    color: #3b82f6;
+    background: #eff6ff;
+}
+
+.stTabs [aria-selected="true"] {
+    color: #3b82f6 !important;
+    border-bottom-color: #3b82f6 !important;
+}
+
+/* Dataframe styling */
+[data-testid="stDataFrame"] {
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+}
+
+/* Input fields */
+.stTextInput > div > div > input,
+.stTextArea > div > div > textarea,
+.stSelectbox > div > div > select {
+    border-radius: 6px;
+    border: 1px solid #e5e7eb;
+}
+
+.stTextInput > div > div > input:focus,
+.stTextArea > div > div > textarea:focus,
+.stSelectbox > div > div > select:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* Expander styling */
+.streamlit-expanderHeader {
+    background: #f9fafb;
+    border-radius: 6px;
+    font-weight: 500;
+    color: #374151;
+}
+
+.streamlit-expanderHeader:hover {
+    background: #eff6ff;
+    color: #3b82f6;
+}
+
+/* Info/Warning/Error boxes */
+.stAlert {
+    border-radius: 6px;
+    border-left: 4px solid;
+}
+
+[data-testid="stNotification"][data-baseweb="notification"] {
+    border-radius: 6px;
+}
+
+/* Progress bars */
+.stProgress > div > div > div {
+    background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%);
+}
+
+/* File uploader */
+[data-testid="stFileUploader"] {
+    border: 2px dashed #e5e7eb;
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+[data-testid="stFileUploader"]:hover {
+    border-color: #3b82f6;
+    background: #eff6ff;
+}
+
+/* Links */
+a {
+    color: #3b82f6;
+    text-decoration: none;
+}
+
+a:hover {
+    color: #2563eb;
+    text-decoration: underline;
+}
+
+/* Divider */
+hr {
+    border-color: #e5e7eb;
+    margin: 1.5rem 0;
+}
+
+/* Custom stat box class */
+.stat-box {
+    text-align: center;
+    padding: 1rem;
+    background: #f9fafb;
+    border-radius: 6px;
+    border-left: 3px solid #3b82f6;
+}
+
+/* Session card styling */
+.session-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    background: #f9fafb;
+    border-radius: 6px;
+    margin-bottom: 0.75rem;
+}
+
+/* Status badges */
+.status-badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.status-active {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.status-completed {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+.status-in-progress {
+    background: #fef3c7;
+    color: #92400e;
+}
