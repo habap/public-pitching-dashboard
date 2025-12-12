@@ -34,21 +34,21 @@ DB_PATH = "pitching_analytics.db"
 
 def get_db_connection():
     """Create database connection"""
-    try:
-        connection = mysql.connector.connect(**DB_CONFIG)
-        if connection.is_connected():
-            return connection
-    except Error as e:
-        st.error(f"Error connecting to MySQL: {e}")
-        return None
-    # when it gets put into SQLite, uncomment the following lines and comment out the MySQL part
     # try:
-    #     connection = sqlite3.connect(DB_PATH)
-    #     connection.row_factory = sqlite3.Row
-    #     return connection
-    # except Exception as e:
-    #     st.error(f"Error connecting to database: {e}")
+    #     connection = mysql.connector.connect(**DB_CONFIG)
+    #     if connection.is_connected():
+    #         return connection
+    # except Error as e:
+    #     st.error(f"Error connecting to MySQL: {e}")
     #     return None
+    # when it gets put into SQLite, uncomment the following lines and comment out the MySQL part
+    try:
+        connection = sqlite3.connect(DB_PATH)
+        connection.row_factory = sqlite3.Row
+        return connection
+    except Exception as e:
+        st.error(f"Error connecting to database: {e}")
+        return None
 
 def get_all_coaches(conn):
     """Get all coaches"""
